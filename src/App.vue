@@ -1,62 +1,95 @@
+<template>
+  <div class="container">
+    <header>
+      <h1>✈️ Trip Manager</h1>
+      <p>Plan and manage your leisure travels</p>
+    </header>
+
+    <main>
+      <TripForm
+        :editingTrip="editingTrip"
+        @trip-saved="refresh"
+        @reset-edit="clearEditing"
+      />
+      <TripList
+        :refreshTrigger="refreshKey"
+        @edit-trip="startEdit"
+      />
+    </main>
+
+    <footer>
+      <div class="contact">
+        <p><strong>Contact:</strong> Group Members: Alice Johnson, Bob Smith, Charlie Davis</p>
+        <p><small>Leisure Travel App - Vue + REST API + SQLite</small></p>
+      </div>
+    </footer>
+  </div>
+</template>
+
 <script setup>
 import { ref } from 'vue'
 import TripForm from './components/TripForm.vue'
 import TripList from './components/TripList.vue'
 
-const refreshTrigger = ref(0)
+const refreshKey = ref(0)
 const editingTrip = ref(null)
 
-function onTripSaved() {
-  refreshTrigger.value++
-  editingTrip.value = null
+function refresh() {
+  refreshKey.value++ // forces TripList to reload
 }
 
-function onEditTrip(trip) {
+function startEdit(trip) {
   editingTrip.value = trip
 }
 
-function onResetEdit() {
+function clearEditing() {
   editingTrip.value = null
 }
 </script>
 
-<template>
-  <header>
-    <h1>Travel Manager</h1>
-  </header>
-
-  <main>
-    <TripForm
-      :editingTrip="editingTrip"
-      @trip-saved="onTripSaved"
-      @reset-edit="onResetEdit"
-    />
-    <TripList
-      :refreshTrigger="refreshTrigger"
-      @edit-trip="onEditTrip"
-    />
-  </main>
-</template>
-
-<style scoped>
-header {
-  background-color: #3498db;
-  color: white;
-  padding: 16px 24px;
-  margin-bottom: 24px;
-}
-
-header h1 {
+<style>
+* {
+  box-sizing: border-box;
   margin: 0;
-  font-size: 1.5rem;
+  padding: 0;
 }
-
-main {
-  max-width: 800px;
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f0f8ff;
+  color: #333;
+  line-height: 1.6;
+}
+.container {
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 16px;
+  padding: 20px;
+}
+header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+header h1 {
+  color: #2c3e50;
+  font-size: 2.5rem;
+}
+header p {
+  color: #7f8c8d;
+  font-size: 1.1rem;
+}
+main {
   display: flex;
-  flex-direction: column;
-  gap: 24px;
+  flex-wrap: wrap;
+  gap: 30px;
+}
+main > * {
+  flex: 1;
+  min-width: 280px;
+}
+footer {
+  margin-top: 40px;
+  text-align: center;
+  padding: 20px;
+  border-top: 1px solid #ddd;
+  color: #7f8c8d;
 }
 </style>
