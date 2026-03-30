@@ -1,6 +1,6 @@
 <template>
   <div class="app">
-    <nav v-if="user" class="navbar">
+    <nav v-if="hydrated && user" class="navbar">
       <NuxtLink to="/trips" class="nav-brand">
         <span class="brand-icon">✈</span>
         <span class="brand-text">TripManager</span>
@@ -35,6 +35,11 @@
 <script setup>
 const { user, logout } = useAuth()
 const router = useRouter()
+const hydrated = ref(false)
+
+onMounted(() => {
+  hydrated.value = true
+})
 
 function handleLogout() {
   logout()
