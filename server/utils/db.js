@@ -17,7 +17,7 @@ export function getDb() {
   _pool = new Pool({
     connectionString:
       process.env.DATABASE_URL ||
-      'postgresql://postgres:postgres@localhost:5432/travelmanager',
+      'postgresql://postgres:postgres@localhost:5433/travelmanager',
   })
 
   return _pool
