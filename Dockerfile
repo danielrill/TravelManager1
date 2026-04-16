@@ -7,8 +7,10 @@ RUN npm install
 
 COPY . .
 
+RUN npm run build
+
 EXPOSE 3000
 
 ENV NITRO_HOST=0.0.0.0
 
-CMD ["npm", "run", "dev"]
+CMD ["node", ".output/server/index.mjs"]
