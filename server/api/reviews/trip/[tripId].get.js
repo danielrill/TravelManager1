@@ -1,5 +1,4 @@
 // GET /api/reviews/trip/:tripId
-// Returns all reviews for a trip, joined with reviewer name.
 import { getDb } from '~~/server/utils/db.js'
 
 export default defineEventHandler(async (event) => {
@@ -10,7 +9,7 @@ export default defineEventHandler(async (event) => {
     SELECT r.id, r.trip_id, r.reviewer_id, r.stars, r.comment, r.created_at,
            u.name AS reviewer_name
     FROM reviews r
-    JOIN users u ON u.id = r.reviewer_id
+    JOIN users u ON u.firebase_uid = r.reviewer_id
     WHERE r.trip_id = $1
     ORDER BY r.created_at DESC
   `, [tripId])

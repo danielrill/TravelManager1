@@ -36,20 +36,16 @@
 
 <script setup>
 const { user } = useAuth()
+const { apiFetch } = useApiFetch()
 const router = useRouter()
 
 const trips = ref([])
 const loading = ref(true)
 
 onMounted(async () => {
-  if (!user.value) {
-    return navigateTo('/register')
-  }
-
+  if (!user.value) return navigateTo('/register')
   try {
-    trips.value = await $fetch('/api/trips', {
-      query: { userId: user.value.id },
-    })
+    trips.value = await apiFetch('/api/trips')
   } catch {
     router.push('/register')
   } finally {
@@ -58,11 +54,7 @@ onMounted(async () => {
 })
 
 function formatDate(date) {
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  return new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 </script>
 

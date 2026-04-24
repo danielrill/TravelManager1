@@ -40,6 +40,11 @@ __screenshots__/
 .output
 .data
 .cache
+.claude
+.agents
+
+.impeccable.md
+skills-lock.json
 
 # Env
 .env
