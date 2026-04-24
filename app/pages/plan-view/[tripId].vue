@@ -199,16 +199,27 @@
 
 <script setup>
 const { user } = useAuth()
+const { apiFetch } = useApiFetch()
 const route    = useRoute()
 const tripId   = Number(route.params.tripId)
 
-onMounted(() => { if (!user.value) navigateTo('/register') })
+const tripData = ref(null)
+const planData = ref(null)
+const pending  = ref(true)
 
-// ── Fetch trip + plan in parallel ────────────────────────────────────────────
-const [{ data: tripData }, { data: planData, pending }] = await Promise.all([
-  useFetch(() => `/api/trips/${tripId}`,          { key: `pv-trip-${tripId}` }),
-  useFetch(() => `/api/travel-plans/${tripId}`,   { key: `pv-plan-${tripId}` }),
-])
+onMounted(async () => {
+  if (!user.value) return navigateTo('/register')
+  try {
+    const [t, p] = await Promise.allSettled([
+      apiFetch(`/api/trips/${tripId}`),
+      apiFetch(`/api/travel-plans/${tripId}`),
+    ])
+    if (t.status === 'fulfilled') tripData.value = t.value
+    if (p.status === 'fulfilled') planData.value = p.value
+  } finally {
+    pending.value = false
+  }
+})
 
 const trip = computed(() => tripData.value)
 const plan = computed(() => planData.value?.country ? planData.value : null)
