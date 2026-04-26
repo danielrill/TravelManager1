@@ -46,10 +46,15 @@ services:
       - "8080"
     ports:
       - "127.0.0.1:3000:8080"
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/travelmanager
       - NITRO_HOST=0.0.0.0
       - NITRO_PORT=8080
+      - GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json
+    volumes:
+      - ${HOME}/.config/gcloud/application_default_credentials.json:/root/.config/gcloud/application_default_credentials.json:ro
     depends_on:
       postgres:
         condition: service_healthy

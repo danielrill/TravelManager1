@@ -127,6 +127,7 @@
 
 <script setup>
 const { user } = useAuth()
+const { apiFetch } = useApiFetch()
 const router   = useRouter()
 
 onMounted(() => {
@@ -149,7 +150,7 @@ async function onGlobeSelect(dest) {
   creating.value      = false
   loadingRoutes.value = true
   try {
-    routes.value = await $fetch(`/api/destinations/${dest.id}/routes`)
+    routes.value = await apiFetch(`/api/destinations/${dest.id}/routes`)
     if (routes.value.length) selectedRoute.value = routes.value[0]
   } finally {
     loadingRoutes.value = false
@@ -175,10 +176,9 @@ async function createAndPlan() {
   createError.value = ''
   saving.value      = true
   try {
-    const trip = await $fetch('/api/trips', {
+    const trip = await apiFetch('/api/trips', {
       method: 'POST',
       body: {
-        user_id:           user.value.id,
         title:             form.title,
         destination:       selected.value.city,
         start_date:        form.start_date,
@@ -186,7 +186,6 @@ async function createAndPlan() {
         detail_description: '',
       },
     })
-    // Navigate to the plan wizard, pre-selecting this destination
     await router.push(`/plan/${trip.id}?destId=${selected.value.id}`)
   } catch (err) {
     createError.value = err.data?.statusMessage || err.message || 'Something went wrong'
