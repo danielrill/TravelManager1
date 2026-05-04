@@ -245,3 +245,12 @@ resource "google_cloud_run_v2_service_iam_member" "public" {
   role     = "roles/run.invoker"
   member   = "allUsers"
 }
+
+resource "google_compute_region_network_endpoint_group" "frankfurt_neg" {
+  name                  = "frankfurt-neg"
+  network_endpoint_type = "SERVERLESS"
+  region                = "europe-west3"
+  cloud_run {
+    service = google_cloud_run_v2_service.app.name # "app" statt "travelmanager"
+  }
+}
