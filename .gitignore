@@ -58,3 +58,9 @@ terraform/terraform.tfvars
 terraform/*.auto.tfvars
 terraform/*.tfstate
 terraform/*.tfstate.*
+
+terraform_iaas/.terraform/
+terraform_iaas/terraform.tfvars
+terraform_iaas/*.auto.tfvars
+terraform_iaas/*.tfstate
+terraform_iaas/*.tfstate.*
