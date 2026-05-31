@@ -7,9 +7,9 @@ case "${1:-}" in
   spike)
     SPIKE_PEAK=2000 LOCUST_SHAPE=spike locust -f locustfile.py --host "$HOST" \
       --headless --run-time 6m \
-      --html reports/stress2000_caas.html \
-      --csv reports/stress2000_caas \
-      --logfile reports/stress2000_caas.log --loglevel INFO
+      --html reports/spike2000_caas.html \
+      --csv reports/spike2000_caas \
+      --logfile reports/spike2000_caas.log --loglevel INFO
     ;;
   periodic)
     PERIODIC_PEAK=2000 LOCUST_SHAPE=periodic locust -f locustfile.py --host "$HOST" \
