@@ -24,6 +24,8 @@ from the per-service ExternalSecret (envFrom) so they are not rendered here.
   value: {{ .Values.global.gcpProject | quote }}
 - name: VERTEX_LOCATION
   value: {{ .Values.global.vertexLocation | default .Values.global.region | default "europe-west1" | quote }}
+- name: FROM_EMAIL
+  value: {{ .Values.global.fromEmail | default "alerts@onecloudaway.de" | quote }}
 - name: USER_SERVICE_URL
   value: "http://user-service:8080"
 - name: TRIP_SERVICE_URL

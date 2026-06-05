@@ -6,11 +6,12 @@ global:
   # Cloud SQL instance connection name for the Auth Proxy sidecar.
   cloudSqlInstance: PROJECT_ID:europe-west1:travelmanager-postgres
   gcpProject: PROJECT_ID
+  # Resend sender — must be a verified domain. Injected via commonEnv (NOT
+  # extraEnv: CI overrides extraEnv wholesale with --set, which would clobber it).
+  fromEmail: alerts@onecloudaway.de
   cloudSql:
     enabled: true                # local: false -> no sidecar, use in-cluster Postgres
-  extraEnv:                      # local: [{name: PUBSUB_DISABLED, value:"1"}, ...]
-    - name: FROM_EMAIL           # Resend sender — must be a verified domain
-      value: alerts@onecloudaway.de
+  extraEnv: []                   # local: [{name: PUBSUB_DISABLED, value:"1"}, ...]
 
 # In-cluster Postgres — LOCAL ONLY (kind/minikube). Prod uses Cloud SQL.
 postgres:
