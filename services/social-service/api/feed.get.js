@@ -19,11 +19,12 @@ export default defineEventHandler(async (event) => {
   )
   if (!follows.length) return []
 
+  const { q } = getQuery(event)
   const uids = follows.map(f => f.followee_uid).join(',')
   const tripServiceUrl = process.env.TRIP_SERVICE_URL || 'http://localhost:3002'
   const trips = await $fetch('/api/internal/trips-by-authors', {
     baseURL: tripServiceUrl,
-    query: { uids },
+    query: { uids, ...(q && String(q).trim() ? { q: String(q).trim() } : {}) },
   }).catch((e) => { console.error('[social-service] trips-by-authors fetch failed', e?.message || e); return [] })
 
   // Newest first; a small popularity nudge so liked trips edge upward.

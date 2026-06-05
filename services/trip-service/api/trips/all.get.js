@@ -1,5 +1,5 @@
 // GET /api/trips/all — public. All trips + denormalised author_name.
-// Supports ?q= search on title / destination / short_description.
+// Supports ?q= search on title / destination / short_description / author_name.
 import { getDb } from '@travelmanager/shared/db'
 import { cached } from '@travelmanager/shared/cache'
 
@@ -16,6 +16,7 @@ export default defineEventHandler(async (event) => {
     const { rows } = await db.query(
       `${base}
        WHERE title ILIKE $1 OR destination ILIKE $1 OR short_description ILIKE $1
+          OR author_name ILIKE $1
        ORDER BY start_date DESC`,
       [search]
     )
