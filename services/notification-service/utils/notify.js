@@ -16,20 +16,20 @@ async function resolveEmail(userUid) {
 }
 
 async function sendEmail(to, subject, text) {
-  const sendgridApiKey = process.env.SENDGRID_API_KEY || ''
+  const resendApiKey = process.env.RESEND_API_KEY || ''
   const fromEmail = process.env.FROM_EMAIL || 'alerts@travelmanager.app'
-  if (!sendgridApiKey) {
-    console.log(`[notify] (no SendGrid key) would email ${to}: ${subject}`)
+  if (!resendApiKey) {
+    console.log(`[notify] (no Resend key) would email ${to}: ${subject}`)
     return false
   }
-  await $fetch('https://api.sendgrid.com/v3/mail/send', {
+  await $fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${sendgridApiKey}` },
+    headers: { Authorization: `Bearer ${resendApiKey}` },
     body: {
-      personalizations: [{ to: [{ email: to }] }],
-      from: { email: fromEmail },
+      from: fromEmail,
+      to: [to],
       subject,
-      content: [{ type: 'text/plain', value: text }],
+      text,
     },
   })
   return true

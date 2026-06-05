@@ -12,16 +12,16 @@ resource "google_secret_manager_secret_version" "rapidapi_key" {
   secret_data = var.rapidapi_key
 }
 
-resource "google_secret_manager_secret" "sendgrid_api_key" {
+resource "google_secret_manager_secret" "resend_api_key" {
   project   = var.project_id
-  secret_id = "sendgrid-api-key"
+  secret_id = "resend-api-key"
   replication {
     auto {}
   }
 }
-resource "google_secret_manager_secret_version" "sendgrid_api_key" {
-  secret      = google_secret_manager_secret.sendgrid_api_key.id
-  secret_data = var.sendgrid_api_key
+resource "google_secret_manager_secret_version" "resend_api_key" {
+  secret      = google_secret_manager_secret.resend_api_key.id
+  secret_data = var.resend_api_key
 }
 
 resource "google_secret_manager_secret" "firebase_service_account" {

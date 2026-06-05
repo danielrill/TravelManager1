@@ -168,7 +168,7 @@ serviceSecrets:
     DATABASE_URL: travel-info-database-url
   notification-service:
     DATABASE_URL: notification-database-url
-    SENDGRID_API_KEY: sendgrid-api-key
+    RESEND_API_KEY: resend-api-key
   api-gateway:
     FIREBASE_SERVICE_ACCOUNT: firebase-service-account
     REDIS_URL: redis-url

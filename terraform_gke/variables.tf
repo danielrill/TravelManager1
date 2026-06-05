@@ -60,7 +60,7 @@ variable "rapidapi_key" {
   default   = ""
   sensitive = true
 }
-variable "sendgrid_api_key" {
+variable "resend_api_key" {
   type      = string
   default   = ""
   sensitive = true
