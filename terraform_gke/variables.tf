@@ -9,6 +9,12 @@ variable "cluster_name" {
   default = "travelmanager-gke"
 }
 
+# owner/repo that GitHub Actions WIF is scoped to (deploy.yml auth).
+variable "github_repo" {
+  type    = string
+  default = "cikoglukai/TravelManager"
+}
+
 variable "db_instance_name" {
   type    = string
   default = "travelmanager-postgres"

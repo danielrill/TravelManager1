@@ -19,3 +19,23 @@ output "gke_runtime_sa" {
 output "redis_host" {
   value = google_redis_instance.cache.host
 }
+
+# --- GitHub Actions (deploy.yml) -------------------------------------------
+# Set these as repository secrets:
+#   gh secret set WIF_PROVIDER       -b "$(terraform output -raw wif_provider)"
+#   gh secret set DEPLOY_SA          -b "$(terraform output -raw deploy_sa)"
+#   gh secret set GCP_PROJECT        -b "$(terraform output -raw project_id)"
+#   gh secret set CLOUD_SQL_INSTANCE -b "$(terraform output -raw cloud_sql_connection_name)"
+# Plus the public NUXT_PUBLIC_* Firebase/Maps values (not managed here).
+output "wif_provider" {
+  description = "WIF_PROVIDER secret — full provider resource name"
+  value       = google_iam_workload_identity_pool_provider.github.name
+}
+output "deploy_sa" {
+  description = "DEPLOY_SA secret — deployer service account email"
+  value       = google_service_account.deploy.email
+}
+output "project_id" {
+  description = "GCP_PROJECT secret"
+  value       = var.project_id
+}

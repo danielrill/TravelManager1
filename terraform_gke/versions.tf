@@ -27,6 +27,8 @@ resource "google_project_service" "required" {
     "artifactregistry.googleapis.com",
     "container.googleapis.com",
     "iam.googleapis.com",
+    "iamcredentials.googleapis.com", # SA impersonation via WIF
+    "sts.googleapis.com",            # OIDC token exchange (GitHub Actions)
     "pubsub.googleapis.com",
     "redis.googleapis.com",
     "secretmanager.googleapis.com",
