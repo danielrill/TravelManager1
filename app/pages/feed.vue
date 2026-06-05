@@ -27,38 +27,40 @@
 
     <template v-else>
     <p v-if="error" class="form-error">{{ error }}</p>
-    <p v-if="pending" class="loading">Loading your feed…</p>
+    <p v-if="loading" class="loading">Loading your feed…</p>
 
-    <div v-else-if="entries.length" class="trip-grid">
-      <NuxtLink v-for="e in entries" :key="e.trip_id" :to="`/trips/${e.trip_id}`" class="trip-card">
-        <div class="trip-card-title">{{ e.title }}</div>
-        <div class="trip-card-meta">
-          <span class="badge badge-dest">📍 {{ e.destination }}</span>
-          <span class="badge badge-date">by {{ e.author_name }}</span>
-        </div>
-      </NuxtLink>
-    </div>
+    <template v-else>
+      <div v-if="entries.length" class="trip-grid">
+        <NuxtLink v-for="e in entries" :key="e.trip_id" :to="`/trips/${e.trip_id}`" class="trip-card">
+          <div class="trip-card-title">{{ e.title }}</div>
+          <div class="trip-card-meta">
+            <span class="badge badge-dest">📍 {{ e.destination }}</span>
+            <span class="badge badge-date">by {{ e.author_name }}</span>
+          </div>
+        </NuxtLink>
+      </div>
 
-    <div v-else-if="debouncedSearch" class="empty-state">
-      <div class="empty-icon">🔍</div>
-      <p>No trips in your feed match "{{ debouncedSearch }}".</p>
-    </div>
+      <div v-else-if="debouncedSearch" class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <p>No trips in your feed match "{{ debouncedSearch }}".</p>
+      </div>
 
-    <div v-else class="empty-state">
-      <div class="empty-icon">📰</div>
-      <p>Your feed is empty. Follow travellers and their new trips show up here.</p>
-      <NuxtLink to="/discover" class="btn btn-gold" style="margin-top:16px">Find travellers to follow →</NuxtLink>
-    </div>
+      <div v-else class="empty-state">
+        <div class="empty-icon">📰</div>
+        <p>Your feed is empty. Follow travellers and their new trips show up here.</p>
+        <NuxtLink to="/discover" class="btn btn-gold" style="margin-top:16px">Find travellers to follow →</NuxtLink>
+      </div>
+
+      <div v-if="hasMore" ref="sentinel" class="scroll-sentinel">
+        <span v-if="loadingMore" class="loading-spinner small">✈</span>
+      </div>
+    </template>
     </template>
   </div>
 </template>
 
 <script setup>
-const { apiFetch } = useApiFetch()
 const { can, planLabel, requiredPlanFor } = usePlan()
-const entries = ref([])
-const pending = ref(true)
-const error = ref('')
 
 const searchQuery     = ref('')
 const debouncedSearch = ref('')
@@ -69,25 +71,19 @@ function onSearchInput() {
   debounceTimer = setTimeout(() => { debouncedSearch.value = searchQuery.value }, 350)
 }
 
-async function fetchFeed() {
-  // Proactively gated: skip the call entirely if the plan can't use the feed.
-  if (!can('feed')) { pending.value = false; return }
-  pending.value = true
-  error.value = ''
-  try {
-    const url = debouncedSearch.value
-      ? `/api/feed?q=${encodeURIComponent(debouncedSearch.value)}`
-      : '/api/feed'
-    entries.value = await apiFetch(url)
-  } catch (err) {
-    error.value = err?.data?.statusMessage || 'The feed requires the Standard plan or higher.'
-  } finally {
-    pending.value = false
-  }
-}
+// Only fetch/paginate when the plan unlocks the feed (gated at the gateway too).
+const { items: entries, loading, loadingMore, hasMore, error, reset, sentinel } = useInfiniteScroll(
+  ({ limit, offset }) => {
+    const base = `/api/feed?limit=${limit}&offset=${offset}`
+    return debouncedSearch.value
+      ? `${base}&q=${encodeURIComponent(debouncedSearch.value)}`
+      : base
+  },
+  { enabled: () => can('feed') },
+)
 
-onMounted(fetchFeed)
-watch(debouncedSearch, fetchFeed)
+onMounted(() => { if (can('feed')) reset() })
+watch(debouncedSearch, () => { if (can('feed')) reset() })
 </script>
 
 <style scoped>

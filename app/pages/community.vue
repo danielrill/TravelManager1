@@ -30,44 +30,49 @@
       <p>Loading trips…</p>
     </div>
 
-    <div v-else-if="trips.length" class="trip-grid">
-      <div
-        v-for="trip in trips"
-        :key="trip.id"
-        class="trip-card"
-      >
-        <NuxtLink :to="`/trips/${trip.id}`" class="trip-card-body">
-          <div class="trip-card-meta">
-            <span class="trip-card-destination">{{ trip.destination }}</span>
-            <span class="trip-card-date">{{ formatDate(trip.start_date) }}</span>
-          </div>
-          <h3 class="trip-card-title">{{ trip.title }}</h3>
-          <p class="trip-card-desc">{{ trip.short_description }}</p>
-          <span v-if="trip.reason" class="reason-badge" :class="`reason-${trip.reason}`">
-            {{ reasonLabel(trip.reason) }}
-          </span>
-        </NuxtLink>
-        <div class="trip-card-footer">
-          <NuxtLink :to="`/users/${trip.user_uid}`" class="trip-card-author">
-            <span class="author-avatar">{{ trip.author_name.charAt(0).toUpperCase() }}</span>
-            {{ trip.author_name }}
+    <template v-else>
+      <div v-if="trips.length" class="trip-grid">
+        <div
+          v-for="trip in trips"
+          :key="trip.id"
+          class="trip-card"
+        >
+          <NuxtLink :to="`/trips/${trip.id}`" class="trip-card-body">
+            <div class="trip-card-meta">
+              <span class="trip-card-destination">{{ trip.destination }}</span>
+              <span class="trip-card-date">{{ formatDate(trip.start_date) }}</span>
+            </div>
+            <h3 class="trip-card-title">{{ trip.title }}</h3>
+            <p class="trip-card-desc">{{ trip.short_description }}</p>
+            <span v-if="trip.reason" class="reason-badge" :class="`reason-${trip.reason}`">
+              {{ reasonLabel(trip.reason) }}
+            </span>
           </NuxtLink>
-          <FollowButton :uid="trip.user_uid" />
+          <div class="trip-card-footer">
+            <NuxtLink :to="`/users/${trip.user_uid}`" class="trip-card-author">
+              <span class="author-avatar">{{ trip.author_name.charAt(0).toUpperCase() }}</span>
+              {{ trip.author_name }}
+            </NuxtLink>
+            <FollowButton :uid="trip.user_uid" />
+          </div>
         </div>
       </div>
-    </div>
 
-    <div v-else class="loading-state">
-      <p v-if="debouncedSearch">No trips match "{{ debouncedSearch }}".</p>
-      <p v-else>No trips found yet. Be the first to create one!</p>
-      <NuxtLink v-if="user" to="/trips/new" class="btn btn-gold" style="margin-top:16px">Create Trip</NuxtLink>
-    </div>
+      <div v-else class="loading-state">
+        <p v-if="debouncedSearch">No trips match "{{ debouncedSearch }}".</p>
+        <p v-else>No trips found yet. Be the first to create one!</p>
+        <NuxtLink v-if="user" to="/trips/new" class="btn btn-gold" style="margin-top:16px">Create Trip</NuxtLink>
+      </div>
+
+      <div v-if="hasMore" ref="sentinel" class="scroll-sentinel">
+        <span v-if="loadingMore" class="loading-spinner small">✈</span>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup>
 const { user } = useAuth()
-const { apiFetch } = useApiFetch()
 const { loadFollows } = useFollows()
 
 const searchQuery     = ref('')
@@ -81,34 +86,26 @@ function onSearchInput() {
   }, 350)
 }
 
-const tripsData = ref([])
-const loading   = ref(false)
-const sortMode  = ref('newest')   // 'newest' | 'foryou'
+const sortMode = ref('newest')   // 'newest' | 'foryou'
 
-async function fetchTrips() {
-  loading.value = true
-  try {
-    let url
-    if (sortMode.value === 'foryou') {
-      url = '/api/trips/recommended'           // personalised, ignores search
-    } else {
-      url = debouncedSearch.value
-        ? `/api/trips/all?q=${encodeURIComponent(debouncedSearch.value)}`
-        : '/api/trips/all'
-    }
-    tripsData.value = await apiFetch(url)
-  } catch {
-    tripsData.value = []
-  } finally {
-    loading.value = false
-  }
-}
+// "For You" returns a fixed personalised set (no paging); only "Newest" is the
+// scrollable, paginated, searchable public feed.
+const { items, loading, loadingMore, hasMore, reset, sentinel } = useInfiniteScroll(
+  ({ limit, offset }) => {
+    if (sortMode.value === 'foryou') return '/api/trips/recommended'
+    const base = `/api/trips/all?limit=${limit}&offset=${offset}`
+    return debouncedSearch.value
+      ? `${base}&q=${encodeURIComponent(debouncedSearch.value)}`
+      : base
+  },
+  { enabled: () => sortMode.value === 'newest' },
+)
 
-onMounted(() => { fetchTrips(); loadFollows() })
-watch(debouncedSearch, fetchTrips)
-watch(sortMode, fetchTrips)
+onMounted(() => { reset(); loadFollows() })
+watch(debouncedSearch, reset)
+watch(sortMode, reset)
 
-const trips = computed(() => tripsData.value)
+const trips = computed(() => items.value)
 
 function formatDate(d) {
   return new Date(d).toLocaleDateString('en-US', {
@@ -211,6 +208,12 @@ function reasonLabel(r) { return REASON_LABELS[r] || '' }
   font-size: 2.25rem;
   margin-bottom: 12px;
   animation: fly 2s ease-in-out infinite;
+}
+.loading-spinner.small { font-size: 1.4rem; margin: 0; }
+
+.scroll-sentinel {
+  display: flex; justify-content: center; align-items: center;
+  min-height: 48px; padding: 16px;
 }
 
 @keyframes fly {

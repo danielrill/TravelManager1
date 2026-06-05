@@ -2,7 +2,7 @@
 // Denormalises author_name from the gateway identity (no users table here) and
 // publishes a TripCreated event for the Social feed builder.
 import { getDb } from '@travelmanager/shared/db'
-import { invalidate } from '@travelmanager/shared/cache'
+import { invalidatePattern } from '@travelmanager/shared/cache'
 import { publishEvent } from '@travelmanager/shared/pubsub'
 import { geocodeCity } from '@travelmanager/shared/geocode'
 import { updateTripEmbedding } from '../../utils/embedding.js'
@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) => {
   // trip creation: any failure (no Vertex creds, pgvector absent) is swallowed
   // and the backfill cron fills it later.
   await updateTripEmbedding(db, trip).catch(() => {})
-  invalidate('trips:all')   // bust the public feed cache (fire-and-forget)
+  invalidatePattern('trips:all')   // bust all paged public-feed caches (fire-and-forget)
   await publishEvent('TripCreated', {
     tripId: trip.id,
     userUid: trip.user_uid,

@@ -19,17 +19,21 @@ export default defineEventHandler(async (event) => {
   )
   if (!follows.length) return []
 
-  const { q } = getQuery(event)
+  const { q, limit, offset } = getQuery(event)
   const uids = follows.map(f => f.followee_uid).join(',')
   const tripServiceUrl = process.env.TRIP_SERVICE_URL || 'http://localhost:3002'
+
+  // Pagination + the popularity-nudge ordering live in trips-by-authors so pages
+  // stay stable across requests (infinite scroll). Forward the params through.
   const trips = await $fetch('/api/internal/trips-by-authors', {
     baseURL: tripServiceUrl,
-    query: { uids, ...(q && String(q).trim() ? { q: String(q).trim() } : {}) },
+    query: {
+      uids,
+      ...(q && String(q).trim() ? { q: String(q).trim() } : {}),
+      ...(limit != null ? { limit } : {}),
+      ...(offset != null ? { offset } : {}),
+    },
   }).catch((e) => { console.error('[social-service] trips-by-authors fetch failed', e?.message || e); return [] })
 
-  // Newest first; a small popularity nudge so liked trips edge upward.
-  return [...trips]
-    .map(t => ({ ...t, score: Number((1 + Math.min(t.like_count || 0, 10) * 0.05).toFixed(3)) }))
-    .sort((a, b) => (b.score - a.score) || (Date.parse(b.created_at) - Date.parse(a.created_at)))
-    .slice(0, 100)
+  return trips
 })

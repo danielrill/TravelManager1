@@ -1,6 +1,6 @@
 // PUT /api/trips/:id — owner-only update. Publishes TripUpdated.
 import { getDb } from '@travelmanager/shared/db'
-import { invalidate } from '@travelmanager/shared/cache'
+import { invalidatePattern } from '@travelmanager/shared/cache'
 import { publishEvent } from '@travelmanager/shared/pubsub'
 import { geocodeCity } from '@travelmanager/shared/geocode'
 import { updateTripEmbedding } from '../../utils/embedding.js'
@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
   const trip = rows[0]
   // Re-embed: title/destination/description changes shift semantics. Best-effort.
   await updateTripEmbedding(db, trip).catch(() => {})
-  invalidate('trips:all')   // bust the public feed cache (fire-and-forget)
+  invalidatePattern('trips:all')   // bust all paged public-feed caches (fire-and-forget)
   await publishEvent('TripUpdated', {
     tripId: trip.id,
     userUid: trip.user_uid,

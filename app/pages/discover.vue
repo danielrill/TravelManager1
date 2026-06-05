@@ -25,29 +25,34 @@
       <p>Loading travellers…</p>
     </div>
 
-    <div v-else-if="travellers.length" class="trip-grid">
-      <div v-for="t in travellers" :key="t.uid" class="trip-card traveller-card">
-        <NuxtLink :to="`/users/${t.uid}`" class="traveller-main">
-          <span class="traveller-avatar">{{ t.name.charAt(0).toUpperCase() }}</span>
-          <span class="traveller-info">
-            <span class="traveller-name">{{ t.name }}</span>
-            <span class="traveller-count">{{ t.tripCount }} {{ t.tripCount === 1 ? 'trip' : 'trips' }}</span>
-          </span>
-        </NuxtLink>
-        <FollowButton :uid="t.uid" />
+    <template v-else>
+      <div v-if="travellers.length" class="trip-grid">
+        <div v-for="t in travellers" :key="t.uid" class="trip-card traveller-card">
+          <NuxtLink :to="`/users/${t.uid}`" class="traveller-main">
+            <span class="traveller-avatar">{{ t.name.charAt(0).toUpperCase() }}</span>
+            <span class="traveller-info">
+              <span class="traveller-name">{{ t.name }}</span>
+              <span class="traveller-count">{{ t.tripCount }} {{ t.tripCount === 1 ? 'trip' : 'trips' }}</span>
+            </span>
+          </NuxtLink>
+          <FollowButton :uid="t.uid" />
+        </div>
       </div>
-    </div>
 
-    <div v-else class="loading-state">
-      <p v-if="debouncedSearch">No travellers match "{{ debouncedSearch }}".</p>
-      <p v-else>No travellers found yet.</p>
-    </div>
+      <div v-else class="loading-state">
+        <p v-if="debouncedSearch">No travellers match "{{ debouncedSearch }}".</p>
+        <p v-else>No travellers found yet.</p>
+      </div>
+
+      <div v-if="hasMore" ref="sentinel" class="scroll-sentinel">
+        <span v-if="loadingMore" class="loading-spinner small">✈</span>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup>
 const { user } = useAuth()
-const { apiFetch } = useApiFetch()
 const { loadFollows } = useFollows()
 
 const searchQuery     = ref('')
@@ -59,30 +64,22 @@ function onSearchInput() {
   debounceTimer = setTimeout(() => { debouncedSearch.value = searchQuery.value }, 350)
 }
 
-const tripsData = ref([])
-const loading   = ref(false)
+const { items, loading, loadingMore, hasMore, reset, sentinel } = useInfiniteScroll(
+  ({ limit, offset }) => {
+    const base = `/api/trips/all?limit=${limit}&offset=${offset}`
+    return debouncedSearch.value
+      ? `${base}&q=${encodeURIComponent(debouncedSearch.value)}`
+      : base
+  },
+)
 
-async function fetchTrips() {
-  loading.value = true
-  try {
-    const url = debouncedSearch.value
-      ? `/api/trips/all?q=${encodeURIComponent(debouncedSearch.value)}`
-      : '/api/trips/all'
-    tripsData.value = await apiFetch(url)
-  } catch {
-    tripsData.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(() => { fetchTrips(); loadFollows() })
-watch(debouncedSearch, fetchTrips)
+onMounted(() => { reset(); loadFollows() })
+watch(debouncedSearch, reset)
 
 // Collapse trips into one entry per author, excluding the current user.
 const travellers = computed(() => {
   const byUid = new Map()
-  for (const trip of tripsData.value) {
+  for (const trip of items.value) {
     if (!trip.user_uid || trip.user_uid === user.value?.firebase_uid) continue
     const existing = byUid.get(trip.user_uid)
     if (existing) existing.tripCount++
@@ -121,7 +118,10 @@ const travellers = computed(() => {
   color: var(--text-muted);
 }
 .loading-spinner { display: inline-block; font-size: 2.25rem; margin-bottom: 12px; animation: fly 2s ease-in-out infinite; }
+.loading-spinner.small { font-size: 1.4rem; margin: 0; }
 @keyframes fly { 0%,100% { transform: translateX(0) rotate(0deg); } 50% { transform: translateX(10px) rotate(5deg); } }
+
+.scroll-sentinel { display: flex; justify-content: center; align-items: center; min-height: 48px; padding: 16px; }
 
 .traveller-card {
   display: flex;
