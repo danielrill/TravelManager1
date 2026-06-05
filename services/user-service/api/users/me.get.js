@@ -11,5 +11,9 @@ export default defineEventHandler(async (event) => {
     [ctx.uid]
   )
   if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Profile not found' })
-  return rows[0]
+
+  // `plan` isn't a users column — it lives on the tenant and is resolved by the
+  // gateway, which forwards it as the trusted `x-plan` header (→ ctx.plan). Surface
+  // it here so the SPA can gate features proactively instead of waiting for a 403.
+  return { ...rows[0], plan: ctx.plan || 'free' }
 })

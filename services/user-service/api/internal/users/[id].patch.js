@@ -3,6 +3,7 @@
 // assigned (B2B partner onboarding) and how users are moved between tenants.
 // Body: { role?, tenant_id? }.
 import { getDb } from '@travelmanager/shared/db'
+import { invalidate } from '@travelmanager/shared/cache'
 
 const ROLES = ['traveler', 'destinationMgr', 'admin']
 
@@ -23,5 +24,8 @@ export default defineEventHandler(async (event) => {
     [role ?? null, tenant_id ?? null, uid]
   )
   if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'User not found' })
+  // Role/tenant change affects the public profile and the gateway's tenant/plan
+  // resolution — bust both (fire-and-forget).
+  invalidate(`user:${uid}`, `tenantplan:${uid}`)
   return rows[0]
 })

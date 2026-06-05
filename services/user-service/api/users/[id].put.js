@@ -1,5 +1,6 @@
 // PUT /api/users/:id — updates name, bio, home_city. Self only.
 import { getDb } from '@travelmanager/shared/db'
+import { invalidate } from '@travelmanager/shared/cache'
 
 export default defineEventHandler(async (event) => {
   const uid = getRouterParam(event, 'id')
@@ -24,5 +25,6 @@ export default defineEventHandler(async (event) => {
     [name.trim(), bio?.trim() ?? '', home_city?.trim() ?? '', uid]
   )
   if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'User not found' })
+  invalidate(`user:${uid}`)   // bust public profile cache (fire-and-forget)
   return rows[0]
 })

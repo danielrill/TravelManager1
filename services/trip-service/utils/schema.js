@@ -37,7 +37,15 @@ export async function initTripDb() {
     -- can rank by popularity in plain SQL without N Firestore reads.
     ALTER TABLE trips ADD COLUMN IF NOT EXISTS like_count INTEGER NOT NULL DEFAULT 0;
 
-    CREATE INDEX IF NOT EXISTS trips_user_uid_idx ON trips (user_uid);
+    -- Composite covers the "my trips" page (WHERE user_uid ORDER BY start_date
+    -- DESC) as a single index scan; the leading column also serves any plain
+    -- user_uid lookup, so the old trips_user_uid_idx is redundant — drop it to
+    -- save write overhead.
+    DROP INDEX IF EXISTS trips_user_uid_idx;
+    CREATE INDEX IF NOT EXISTS trips_user_start_idx ON trips (user_uid, start_date DESC);
+    -- Global recency sort (trips/all) and the active-trips range scan
+    -- (start_date >= CURRENT_DATE ORDER BY start_date).
+    CREATE INDEX IF NOT EXISTS trips_start_date_idx ON trips (start_date);
 
     CREATE TABLE IF NOT EXISTS plan_locations (
       id          SERIAL      PRIMARY KEY,
@@ -58,6 +66,10 @@ export async function initTripDb() {
     -- Place category (hotel | restaurant | airport | attraction | other) so the
     -- autocomplete can filter to that place type and the map can icon it.
     ALTER TABLE plan_locations ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'other';
+
+    -- Locations are always fetched per trip, ordered by position. No
+    -- UNIQUE/FK index exists on trip_id, so this avoids a seq scan per fetch.
+    CREATE INDEX IF NOT EXISTS plan_locations_trip_pos_idx ON plan_locations (trip_id, position);
 
     CREATE TABLE IF NOT EXISTS reviews (
       id            SERIAL      PRIMARY KEY,

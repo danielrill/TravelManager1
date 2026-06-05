@@ -16,3 +16,6 @@ output "cloud_sql_connection_name" {
 output "gke_runtime_sa" {
   value = google_service_account.gke_runtime.email
 }
+output "redis_host" {
+  value = google_redis_instance.cache.host
+}

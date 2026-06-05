@@ -3,6 +3,11 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: false },
 
+  // Pull the shared plan matrix (@travelmanager/shared/tiers) into the client
+  // bundle. It's a workspace-symlinked package, so transpile it rather than treat
+  // it as an external. Only the pure /tiers subpath is imported (no pg/firebase).
+  build: { transpile: ['@travelmanager/shared'] },
+
   // Pure frontend now: the old monolith server/ lives on the IAAS/paas branches.
   // All /api traffic is routed to the API Gateway by the ingress (prod) or nginx
   // (local). apiBase lets the SPA target a different gateway origin if needed.

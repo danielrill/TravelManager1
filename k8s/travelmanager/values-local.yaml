@@ -23,6 +23,16 @@ global:
 postgres:
   enabled: true
 
+redis:
+  enabled: true
+
+# Local PgBouncer fronts the in-cluster postgres (postgres:5432) with the
+# postgres superuser; services connect via pgbouncer:6432 (see DATABASE_URLs).
+pgbouncer:
+  auth:
+    user: postgres
+    password: postgres
+
 firestoreEmulator:
   enabled: true
 
@@ -44,19 +54,23 @@ ingress:
 # Plain Secret values for each db-backed service → in-cluster Postgres.
 localSecretValues:
   user-service:
-    DATABASE_URL: postgresql://postgres:postgres@postgres:5432/travelmanager_user
+    DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_user
+    REDIS_URL: redis://redis:6379
   trip-service:
-    DATABASE_URL: postgresql://postgres:postgres@postgres:5432/travelmanager_trip
+    DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_trip
     RAPIDAPI_KEY: ""
     FIREBASE_SERVICE_ACCOUNT: "{}"
+    REDIS_URL: redis://redis:6379
   destination-service:
-    DATABASE_URL: postgresql://postgres:postgres@postgres:5432/travelmanager_destination
+    DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_destination
+    REDIS_URL: redis://redis:6379
   social-service:
-    DATABASE_URL: postgresql://postgres:postgres@postgres:5432/travelmanager_social
+    DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_social
   travel-info-service:
-    DATABASE_URL: postgresql://postgres:postgres@postgres:5432/travelmanager_travelinfo
+    DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_travelinfo
   notification-service:
-    DATABASE_URL: postgresql://postgres:postgres@postgres:5432/travelmanager_notification
+    DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_notification
     SENDGRID_API_KEY: ""
   api-gateway:
     FIREBASE_SERVICE_ACCOUNT: "{}"
+    REDIS_URL: redis://redis:6379

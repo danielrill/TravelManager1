@@ -26,6 +26,15 @@ variable "db_password" {
   sensitive = true
 }
 
+variable "redis_instance_name" {
+  type    = string
+  default = "travelmanager-redis"
+}
+variable "redis_memory_gb" {
+  type    = number
+  default = 1
+}
+
 # One logical database per microservice (DB-per-service, single instance).
 variable "service_databases" {
   type = map(string)

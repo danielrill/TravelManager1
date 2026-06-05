@@ -46,7 +46,7 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml $.Values.resources | nindent 12 }}
-        {{- if and $svc.db $.Values.global.cloudSql.enabled }}
+        {{- if and $svc.db $.Values.global.cloudSql.enabled (not $.Values.pgbouncer.enabled) }}
         {{- include "tm.cloudSqlSidecar" $ | nindent 8 }}
         {{- end }}
 ---

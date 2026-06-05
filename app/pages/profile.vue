@@ -161,6 +161,43 @@
         </form>
 
       </div><!-- /.profile-card -->
+
+      <!-- ── Plans / subscription ── -->
+      <div class="plans-card">
+        <div class="plans-head">
+          <h3 class="section-label">Your Plan</h3>
+          <span class="plans-current" :class="`plan-${planId}`">{{ planLabel }}</span>
+        </div>
+        <p class="plans-sub">
+          Your workspace is on the <strong>{{ planLabel }}</strong> plan. Plans apply to
+          everyone in your tenant and are managed by your account owner.
+        </p>
+
+        <div class="plan-grid">
+          <div
+            v-for="p in planList"
+            :key="p.id"
+            class="plan-col"
+            :class="{ active: p.id === planId }"
+          >
+            <div class="plan-col-head">
+              <span class="plan-col-name">{{ p.label }}</span>
+              <span v-if="p.id === planId" class="plan-col-tag">Current</span>
+            </div>
+            <div class="plan-col-rate">{{ p.rateLimitPerMin.toLocaleString() }} req/min</div>
+            <ul class="plan-col-features">
+              <li v-for="f in FEATURES" :key="f.key" :class="{ off: !p.features[f.key] }">
+                <span class="feat-mark">{{ p.features[f.key] ? '✓' : '✗' }}</span>{{ f.label }}
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="plans-footer">
+          <span class="plans-footer-text">Need more? Upgrade unlocks the feed, newsletter, white-label branding and B2B insights.</span>
+          <a class="btn btn-gold" href="mailto:sales@onecloudaway.example?subject=Plan%20upgrade">Contact us to upgrade →</a>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -170,6 +207,16 @@ import { getStorage, ref as storageRef, deleteObject } from 'firebase/storage'
 const { user, setUser, waitAuthReady } = useAuth()
 const { apiFetch } = useApiFetch()
 const { uploadImage } = useImageUpload()
+const { planId, planLabel, PLANS } = usePlan()
+
+// Plan comparison table (read-only). Same matrix the gateway enforces.
+const planList = computed(() => Object.values(PLANS))
+const FEATURES = [
+  { key: 'feed',       label: 'Personal feed' },
+  { key: 'newsletter', label: 'Newsletter' },
+  { key: 'whiteLabel', label: 'White-label branding' },
+  { key: 'b2bData',    label: 'B2B partner insights' },
+]
 
 const profile = ref(null)
 const trips   = ref([])
@@ -685,7 +732,122 @@ async function saveProfile() {
   margin-top: 4px;
 }
 
+/* ── Plans card ── */
+.plans-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 32px 40px;
+  margin-top: 24px;
+}
+.plans-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.plans-head .section-label { margin-bottom: 0; }
+.plans-current {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 10px;
+  border-radius: 100px;
+  line-height: 1;
+}
+.plan-free       { background: rgba(15,31,61,0.08); color: var(--text-muted); }
+.plan-standard   { background: rgba(201,168,76,0.2); color: #8a6d20; }
+.plan-enterprise { background: var(--gold); color: var(--navy); }
+
+.plans-sub {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.plan-col {
+  border: 2px solid var(--sand-dark);
+  border-radius: var(--radius);
+  padding: 20px 18px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.plan-col.active {
+  border-color: var(--gold);
+  box-shadow: 0 4px 18px rgba(201,168,76,0.18);
+}
+.plan-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.plan-col-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--navy);
+}
+.plan-col-tag {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--gold);
+  color: var(--navy);
+  padding: 2px 7px;
+  border-radius: 100px;
+}
+.plan-col-rate {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+.plan-col-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.plan-col-features li {
+  font-size: 0.85rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-col-features li.off { color: var(--text-muted); opacity: 0.7; }
+.feat-mark {
+  font-weight: 700;
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--success);
+}
+.plan-col-features li.off .feat-mark { color: var(--text-muted); }
+
+.plans-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid var(--sand-dark);
+}
+.plans-footer-text { color: var(--text-muted); font-size: 0.85rem; flex: 1; min-width: 200px; }
+
 @media (max-width: 600px) {
+  .plans-card { padding: 24px 20px; }
+  .plan-grid { grid-template-columns: 1fr; }
+  .plans-footer .btn { width: 100%; justify-content: center; }
   .profile-hero-content { padding: 0 20px 28px; gap: 16px; }
   .profile-body,
   .profile-edit-form { padding: 28px 20px; }

@@ -2,14 +2,19 @@
 // Deliberately omits `plan` and `custom_domain` (commercially sensitive); the
 // gateway reads the plan via the internal endpoint instead.
 import { getDb } from '@travelmanager/shared/db'
+import { cached } from '@travelmanager/shared/cache'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
-  const db = getDb()
-  const { rows } = await db.query(
-    'SELECT id, name, logo_url, brand_color FROM tenants WHERE id = $1',
-    [id]
-  )
-  if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Tenant not found' })
-  return rows[0]
+  // White-label config — rarely changes (busted on tenant upsert).
+  const tenant = await cached(`tenant:${id}`, 3600, async () => {
+    const db = getDb()
+    const { rows } = await db.query(
+      'SELECT id, name, logo_url, brand_color FROM tenants WHERE id = $1',
+      [id]
+    )
+    return rows[0] ?? null
+  })
+  if (!tenant) throw createError({ statusCode: 404, statusMessage: 'Tenant not found' })
+  return tenant
 })

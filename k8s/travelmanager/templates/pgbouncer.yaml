@@ -1,0 +1,128 @@
+{{- if .Values.pgbouncer.enabled }}
+{{- $upstream := ternary "127.0.0.1" "postgres" .Values.global.cloudSql.enabled }}
+# pgbouncer.ini — upstream is the Cloud SQL Auth Proxy sidecar (127.0.0.1:5432)
+# in prod, or the in-cluster postgres Service locally. Transaction pooling: a
+# server connection is returned to the pool after each transaction, so a small
+# pool fronts many clients. Safe here — services use unnamed parameterized
+# queries and no session state (LISTEN/NOTIFY, advisory locks, session GUCs).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+  labels:
+    app: pgbouncer
+    {{- include "tm.labels" . | nindent 4 }}
+data:
+  pgbouncer.ini: |
+    [databases]
+    {{- range .Values.pgbouncer.databases }}
+    {{ . }} = host={{ $upstream }} port=5432 dbname={{ . }}
+    {{- end }}
+
+    [pgbouncer]
+    listen_addr = 0.0.0.0
+    listen_port = 6432
+    auth_type = scram-sha-256
+    auth_file = /etc/pgbouncer/userlist.txt
+    pool_mode = {{ .Values.pgbouncer.poolMode }}
+    max_client_conn = {{ .Values.pgbouncer.maxClientConn }}
+    default_pool_size = {{ .Values.pgbouncer.defaultPoolSize }}
+    max_db_connections = {{ .Values.pgbouncer.maxDbConnections }}
+    server_tls_sslmode = disable
+    ignore_startup_parameters = extra_float_digits,options
+{{- if not .Values.externalSecrets.enabled }}
+---
+# LOCAL: plain userlist Secret from values. Prod uses the ExternalSecret below.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pgbouncer-userlist
+type: Opaque
+stringData:
+  userlist.txt: |
+    "{{ .Values.pgbouncer.auth.user }}" "{{ .Values.pgbouncer.auth.password }}"
+{{- else }}
+---
+# PROD: pull the userlist line ("<user>" "<password>") from Secret Manager.
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: pgbouncer-userlist
+spec:
+  refreshInterval: {{ .Values.externalSecrets.refreshInterval }}
+  secretStoreRef:
+    name: {{ .Values.externalSecrets.secretStoreRef }}
+    kind: ClusterSecretStore
+  target:
+    name: pgbouncer-userlist
+    creationPolicy: Owner
+  data:
+    - secretKey: userlist.txt
+      remoteRef:
+        key: {{ .Values.pgbouncer.userlistSecret }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  labels:
+    app: pgbouncer
+    {{- include "tm.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.pgbouncer.replicas }}
+  selector:
+    matchLabels:
+      app: pgbouncer
+  template:
+    metadata:
+      labels:
+        app: pgbouncer
+        app.kubernetes.io/part-of: travelmanager
+    spec:
+      serviceAccountName: travelmanager
+      containers:
+        - name: pgbouncer
+          image: {{ .Values.pgbouncer.image }}
+          command: ["pgbouncer", "/etc/pgbouncer/pgbouncer.ini"]
+          ports:
+            - containerPort: 6432
+          volumeMounts:
+            - name: config
+              mountPath: /etc/pgbouncer/pgbouncer.ini
+              subPath: pgbouncer.ini
+            - name: userlist
+              mountPath: /etc/pgbouncer/userlist.txt
+              subPath: userlist.txt
+          readinessProbe:
+            tcpSocket:
+              port: 6432
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { cpu: 500m, memory: 128Mi }
+        {{- if .Values.global.cloudSql.enabled }}
+        {{- include "tm.cloudSqlSidecar" . | nindent 8 }}
+        {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: pgbouncer-config
+        - name: userlist
+          secret:
+            secretName: pgbouncer-userlist
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgbouncer
+  labels:
+    app: pgbouncer
+spec:
+  selector:
+    app: pgbouncer
+  ports:
+    - port: 6432
+      targetPort: 6432
+{{- end }}

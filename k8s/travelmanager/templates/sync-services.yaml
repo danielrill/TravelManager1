@@ -52,7 +52,7 @@ spec:
             failureThreshold: 3      # tolerate transient slowness before restart
           resources:
             {{- toYaml $.Values.resources | nindent 12 }}
-        {{- if and $svc.db $.Values.global.cloudSql.enabled }}
+        {{- if and $svc.db $.Values.global.cloudSql.enabled (not $.Values.pgbouncer.enabled) }}
         {{- include "tm.cloudSqlSidecar" $ | nindent 8 }}
         {{- end }}
 ---

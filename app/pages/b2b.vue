@@ -7,6 +7,18 @@
       <h2>Partner Insights</h2>
     </div>
 
+    <UpgradePrompt v-if="!can('b2bData')" feature="b2bData" icon="📊" title="Partner Insights">
+      Aggregated, anonymized traveller demand data for your destinations is an
+      <strong>{{ requiredPlanFor('b2bData') }}</strong> feature. You're on
+      <strong>{{ planLabel }}</strong>.
+    </UpgradePrompt>
+
+    <div v-else-if="!isDestinationMgr" class="form-error">
+      Partner Insights is limited to Destination Manager accounts. Ask your workspace
+      admin to grant the Destination Manager role.
+    </div>
+
+    <template v-else>
     <div class="b2b-controls">
       <label for="dest-select">Destination</label>
       <select id="dest-select" v-model="selectedId" class="dest-select" @change="loadStats">
@@ -53,12 +65,15 @@
 
       <p class="b2b-note">{{ report.note }}</p>
     </template>
+    </template>
   </div>
 </template>
 
 <script setup>
 const { user } = useAuth()
 const { apiFetch } = useApiFetch()
+const { can, planLabel, requiredPlanFor } = usePlan()
+const isDestinationMgr = computed(() => user.value?.role === 'destinationMgr')
 
 const destinations = ref([])
 const selectedId   = ref('')

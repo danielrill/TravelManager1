@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
   const { tenantId, plan, role } = await resolveTenantPlan(identity.uid)
 
   // Rate limit per caller (uid) at the plan's rate, so users never share a bucket.
-  if (!allow(identity.uid, getPlan(plan).rateLimitPerMin)) {
+  if (!(await allow(identity.uid, getPlan(plan).rateLimitPerMin))) {
     throw createError({ statusCode: 429, statusMessage: 'Rate limit exceeded for your plan' })
   }
 

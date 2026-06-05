@@ -21,50 +21,83 @@ services:
       timeout: 3s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Central PgBouncer (transaction pooling) — single hop to postgres, mirrors
+  # the prod topology. Config + userlist mounted from ./pgbouncer.
+  pgbouncer:
+    image: edoburu/pgbouncer:1.24.1
+    command: ["pgbouncer", "/etc/pgbouncer/pgbouncer.ini"]
+    volumes:
+      - ./pgbouncer/pgbouncer.dev.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer/userlist.dev.txt:/etc/pgbouncer/userlist.txt:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pgbouncer -V >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    depends_on: { postgres: { condition: service_healthy } }
+
   user-service:
     build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE: user-service } }
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/travelmanager_user
-    depends_on: { postgres: { condition: service_healthy } }
+      DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_user
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      pgbouncer: { condition: service_healthy }
+      redis: { condition: service_healthy }
 
   trip-service:
     build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE: trip-service } }
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/travelmanager_trip
+      DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_trip
       DESTINATION_SERVICE_URL: http://destination-service:8080
       RAPIDAPI_KEY: ${RAPIDAPI_KEY:-}
+      REDIS_URL: redis://redis:6379
       PUBSUB_DISABLED: "1"
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on:
+      pgbouncer: { condition: service_healthy }
+      redis: { condition: service_healthy }
 
   destination-service:
     build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE: destination-service } }
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/travelmanager_destination
+      DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_destination
       TRIP_SERVICE_URL: http://trip-service:8080
-    depends_on: { postgres: { condition: service_healthy } }
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      pgbouncer: { condition: service_healthy }
+      redis: { condition: service_healthy }
 
   social-service:
     build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE: social-service } }
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/travelmanager_social
+      DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_social
       PUBSUB_DISABLED: "1"
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on: { pgbouncer: { condition: service_healthy } }
 
   travel-info-service:
     build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE: travel-info-service } }
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/travelmanager_travelinfo
+      DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_travelinfo
       TRIP_SERVICE_URL: http://trip-service:8080
       PUBSUB_DISABLED: "1"
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on: { pgbouncer: { condition: service_healthy } }
 
   notification-service:
     build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE: notification-service } }
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/travelmanager_notification
+      DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_notification
       USER_SERVICE_URL: http://user-service:8080
       PUBSUB_DISABLED: "1"
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on: { pgbouncer: { condition: service_healthy } }
 
   api-gateway:
     build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE: api-gateway } }
@@ -75,10 +108,12 @@ services:
       DESTINATION_SERVICE_URL: http://destination-service:8080
       SOCIAL_SERVICE_URL: http://social-service:8080
       TRAVEL_INFO_SERVICE_URL: http://travel-info-service:8080
+      REDIS_URL: redis://redis:6379
     depends_on:
       - user-service
       - trip-service
       - destination-service
+      - redis
 
   frontend:
     build: { context: ., dockerfile: Dockerfile }

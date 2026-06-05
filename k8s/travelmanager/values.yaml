@@ -14,6 +14,35 @@ global:
 postgres:
   enabled: false
 
+# In-cluster Redis — LOCAL ONLY. Prod uses Memorystore (REDIS_URL via ESO).
+redis:
+  enabled: false
+
+# Central PgBouncer (transaction pooling). When enabled, db-backed services
+# point DATABASE_URL at pgbouncer:6432 and DROP their own Cloud SQL proxy
+# sidecar — only the PgBouncer pod talks to Cloud SQL, so total server
+# connections are capped at maxDbConnections regardless of pod count.
+pgbouncer:
+  enabled: true
+  replicas: 2
+  image: edoburu/pgbouncer:1.24.1
+  poolMode: transaction
+  maxClientConn: 1000
+  defaultPoolSize: 20
+  maxDbConnections: 80          # keep under Cloud SQL max_connections
+  databases:
+    - travelmanager_user
+    - travelmanager_trip
+    - travelmanager_destination
+    - travelmanager_social
+    - travelmanager_travelinfo
+    - travelmanager_notification
+  auth:
+    user: travelmanager         # local overrides to postgres
+    password: ""                # only used for the local plain Secret
+  # Prod: Secret Manager id holding the userlist.txt line(s), synced by ESO.
+  userlistSecret: pgbouncer-userlist
+
 # In-cluster Firestore emulator — LOCAL ONLY. Prod uses real Firestore (ADC via
 # Workload Identity). When enabled, set FIRESTORE_EMULATOR_HOST in global.extraEnv.
 firestoreEmulator:
@@ -120,13 +149,16 @@ serviceAccount:
 serviceSecrets:
   user-service:
     DATABASE_URL: user-database-url
+    REDIS_URL: redis-url
   trip-service:
     DATABASE_URL: trip-database-url
     RAPIDAPI_KEY: rapidapi-key
     GOOGLE_MAPS_SERVER_KEY: google-maps-server-key
     FIREBASE_SERVICE_ACCOUNT: firebase-service-account
+    REDIS_URL: redis-url
   destination-service:
     DATABASE_URL: destination-database-url
+    REDIS_URL: redis-url
   social-service:
     DATABASE_URL: social-database-url
   travel-info-service:
@@ -136,3 +168,4 @@ serviceSecrets:
     SENDGRID_API_KEY: sendgrid-api-key
   api-gateway:
     FIREBASE_SERVICE_ACCOUNT: firebase-service-account
+    REDIS_URL: redis-url

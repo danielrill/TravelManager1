@@ -1,4 +1,5 @@
 export * from './db.js'
+export * from './cache.js'
 export * from './schema-bootstrap.js'
 export * from './firebase.js'
 export * from './identity.js'

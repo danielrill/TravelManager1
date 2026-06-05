@@ -34,6 +34,11 @@ export async function initDestinationDb() {
       notes      TEXT    NOT NULL DEFAULT ''
     );
 
+    -- routes(destination_id) is already covered by UNIQUE(destination_id, name).
+    -- transport/accommodation options have no such constraint but are always
+    -- fetched by route_id (route_id = ANY($1)) — index to avoid seq scans.
+    CREATE INDEX IF NOT EXISTS transport_options_route_idx ON transport_options (route_id);
+
     CREATE TABLE IF NOT EXISTS accommodation_options (
       id              SERIAL    PRIMARY KEY,
       route_id        INTEGER   NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
@@ -43,5 +48,7 @@ export async function initDestinationDb() {
       rating          NUMERIC(2,1) NOT NULL DEFAULT 0,
       notes           TEXT      NOT NULL DEFAULT ''
     );
+
+    CREATE INDEX IF NOT EXISTS accommodation_options_route_idx ON accommodation_options (route_id);
   `)
 }

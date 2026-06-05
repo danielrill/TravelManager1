@@ -2,6 +2,7 @@
 // Denormalises author_name from the gateway identity (no users table here) and
 // publishes a TripCreated event for the Social feed builder.
 import { getDb } from '@travelmanager/shared/db'
+import { invalidate } from '@travelmanager/shared/cache'
 import { publishEvent } from '@travelmanager/shared/pubsub'
 import { geocodeCity } from '@travelmanager/shared/geocode'
 
@@ -50,6 +51,7 @@ export default defineEventHandler(async (event) => {
   )
 
   const trip = rows[0]
+  invalidate('trips:all')   // bust the public feed cache (fire-and-forget)
   await publishEvent('TripCreated', {
     tripId: trip.id,
     userUid: trip.user_uid,

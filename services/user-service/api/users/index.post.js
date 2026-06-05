@@ -3,6 +3,7 @@
 // Identity comes from the gateway-verified token (event.context.user).
 // `name` in the body is used only when creating a new row; ignored afterwards.
 import { getDb } from '@travelmanager/shared/db'
+import { invalidate } from '@travelmanager/shared/cache'
 
 export default defineEventHandler(async (event) => {
   const ctx = event.context.user
@@ -21,5 +22,9 @@ export default defineEventHandler(async (event) => {
     [ctx.uid, ctx.email ?? '', name?.trim() ?? ctx.name ?? ctx.email ?? '', ctx.tenantId ?? 'default']
   )
 
-  return rows[0]
+  invalidate(`user:${ctx.uid}`)   // bust public profile cache (fire-and-forget)
+
+  // Mirror /api/users/me: attach the gateway-resolved plan so the SPA has it the
+  // moment it hydrates user.value after sign-up (no separate fetch needed).
+  return { ...rows[0], plan: ctx.plan || 'free' }
 })

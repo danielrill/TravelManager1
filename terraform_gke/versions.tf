@@ -28,6 +28,7 @@ resource "google_project_service" "required" {
     "container.googleapis.com",
     "iam.googleapis.com",
     "pubsub.googleapis.com",
+    "redis.googleapis.com",
     "secretmanager.googleapis.com",
     "sqladmin.googleapis.com",
   ])

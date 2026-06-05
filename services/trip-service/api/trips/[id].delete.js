@@ -2,6 +2,7 @@
 // so a future trip reusing the SERIAL id cannot inherit stale comments.
 import { getFirestoreDb } from '@travelmanager/shared/firebase'
 import { getDb } from '@travelmanager/shared/db'
+import { invalidate } from '@travelmanager/shared/cache'
 
 async function clearTripSubcollection(fs, collection, tripId) {
   const userDocs = await fs.collection(collection).doc(String(tripId)).collection('users').listDocuments()
@@ -21,6 +22,8 @@ export default defineEventHandler(async (event) => {
     [id, user.uid]
   )
   if (!rowCount) throw createError({ statusCode: 404 })
+
+  invalidate('trips:all')   // bust the public feed cache (fire-and-forget)
 
   try {
     const fs = getFirestoreDb()

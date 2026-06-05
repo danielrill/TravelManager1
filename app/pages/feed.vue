@@ -7,6 +7,13 @@
 
     <SocialTabs />
 
+    <UpgradePrompt v-if="!can('feed')" feature="feed" icon="📰" title="Your personal feed">
+      A live feed of trips from travellers you follow is available on the
+      <strong>{{ requiredPlanFor('feed') }}</strong> plan and above. You're on
+      <strong>{{ planLabel }}</strong>.
+    </UpgradePrompt>
+
+    <template v-else>
     <p v-if="error" class="form-error">{{ error }}</p>
     <p v-if="pending" class="loading">Loading your feed…</p>
 
@@ -25,16 +32,20 @@
       <p>Your feed is empty. Follow travellers and their new trips show up here.</p>
       <NuxtLink to="/discover" class="btn btn-gold" style="margin-top:16px">Find travellers to follow →</NuxtLink>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup>
 const { apiFetch } = useApiFetch()
+const { can, planLabel, requiredPlanFor } = usePlan()
 const entries = ref([])
 const pending = ref(true)
 const error = ref('')
 
 onMounted(async () => {
+  // Proactively gated: skip the call entirely if the plan can't use the feed.
+  if (!can('feed')) { pending.value = false; return }
   try {
     entries.value = await apiFetch('/api/feed')
   } catch (err) {

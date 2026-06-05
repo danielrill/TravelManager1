@@ -25,6 +25,7 @@
             <template v-else>{{ user.name.charAt(0).toUpperCase() }}</template>
           </span>
           {{ user.name }}
+          <span class="plan-badge" :class="`plan-${planId}`">{{ planLabel }}</span>
         </NuxtLink>
         <button class="nav-btn-logout" @click="handleLogout">Logout</button>
       </div>
@@ -68,6 +69,9 @@ const menuOpen = ref(false)
 // White-label logo (set by plugins/whitelabel.client.js) + role-gated nav.
 const brandLogo = useState('brandLogo', () => null)
 const isDestinationMgr = computed(() => user.value?.role === 'destinationMgr')
+
+// Plan badge in the nav (Free / Standard / Enterprise).
+const { planId, planLabel } = usePlan()
 
 onMounted(() => {
   hydrated.value = true
@@ -279,6 +283,21 @@ a { color: inherit; text-decoration: none; }
   object-fit: cover;
   border-radius: 50%;
 }
+
+/* Plan badge — shows the tenant's tier next to the user name. */
+.plan-badge {
+  margin-left: 2px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 100px;
+  line-height: 1;
+}
+.plan-free       { background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.7); }
+.plan-standard   { background: rgba(201,168,76,0.22); color: var(--gold-light); }
+.plan-enterprise { background: var(--gold); color: var(--navy); }
 
 .nav-btn-logout {
   background: none;

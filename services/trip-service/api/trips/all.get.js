@@ -1,6 +1,7 @@
 // GET /api/trips/all — public. All trips + denormalised author_name.
 // Supports ?q= search on title / destination / short_description.
 import { getDb } from '@travelmanager/shared/db'
+import { cached } from '@travelmanager/shared/cache'
 
 export default defineEventHandler(async (event) => {
   const db = getDb()
@@ -21,6 +22,9 @@ export default defineEventHandler(async (event) => {
     return rows
   }
 
-  const { rows } = await db.query(`${base} ORDER BY start_date DESC`)
-  return rows
+  // Unfiltered public feed — high traffic, short TTL (busted on any trip write).
+  return cached('trips:all', 30, async () => {
+    const { rows } = await db.query(`${base} ORDER BY start_date DESC`)
+    return rows
+  })
 })
