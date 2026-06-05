@@ -39,8 +39,10 @@ export default defineEventHandler(async () => {
       if (!recs.length) return // nothing to recommend — skip this user.
 
       const recommendations = recs.map(r => ({
+        id: r.id,
         title: r.title,
         destination: r.destination,
+        shortDescription: r.short_description,
         author: r.author_name,
         reason: r.reason,
       }))

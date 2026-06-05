@@ -9,6 +9,9 @@ global:
   # Resend sender — must be a verified domain. Injected via commonEnv (NOT
   # extraEnv: CI overrides extraEnv wholesale with --set, which would clobber it).
   fromEmail: alerts@onecloudaway.de
+  # Public site base URL for links in emails (newsletter trip cards). Defaults to
+  # https://<ingress.host> if unset.
+  appBaseUrl: https://onecloudaway.de
   cloudSql:
     enabled: true                # local: false -> no sidecar, use in-cluster Postgres
   extraEnv: []                   # local: [{name: PUBSUB_DISABLED, value:"1"}, ...]

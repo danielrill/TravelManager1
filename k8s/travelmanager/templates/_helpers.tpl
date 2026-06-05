@@ -26,6 +26,8 @@ from the per-service ExternalSecret (envFrom) so they are not rendered here.
   value: {{ .Values.global.vertexLocation | default .Values.global.region | default "europe-west1" | quote }}
 - name: FROM_EMAIL
   value: {{ .Values.global.fromEmail | default "alerts@onecloudaway.de" | quote }}
+- name: APP_BASE_URL
+  value: {{ .Values.global.appBaseUrl | default (printf "https://%s" (.Values.ingress.host | default "onecloudaway.de")) | quote }}
 - name: USER_SERVICE_URL
   value: "http://user-service:8080"
 - name: TRIP_SERVICE_URL

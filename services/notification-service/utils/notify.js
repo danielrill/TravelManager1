@@ -37,7 +37,9 @@ async function resolveEmail(userUid) {
   }
 }
 
-async function sendEmail(to, subject, text) {
+// html is optional; when present Resend uses it as the rich body (text stays as
+// the plain-text fallback for clients that don't render HTML).
+async function sendEmail(to, subject, text, html) {
   const resendApiKey = process.env.RESEND_API_KEY || ''
   const fromEmail = process.env.FROM_EMAIL || 'alerts@travelmanager.app'
   if (!resendApiKey) {
@@ -50,7 +52,7 @@ async function sendEmail(to, subject, text) {
       await $fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${resendApiKey}` },
-        body: { from: fromEmail, to: [to], subject, text },
+        body: { from: fromEmail, to: [to], subject, text, ...(html ? { html } : {}) },
       })
       return true
     } catch (e) {
@@ -90,17 +92,62 @@ export async function handleTravelAlert(payload) {
   await logNotification(payload.userUid, 'alert', subject, delivered)
 }
 
+// Escape user-supplied strings before inlining into HTML (trip titles etc).
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ))
+}
+
+// Build the responsive, inline-styled HTML newsletter. Each trip is a clickable
+// card linking to its detail page on the site.
+function newsletterHtml(recs, baseUrl) {
+  const cards = recs.map((r) => {
+    const url = `${baseUrl}/trips/${encodeURIComponent(r.id)}`
+    return `
+      <tr><td style="padding:0 0 16px;">
+        <a href="${url}" style="display:block;text-decoration:none;color:inherit;border:1px solid #e5e7eb;border-radius:12px;padding:20px;background:#ffffff;">
+          <div style="font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#2563eb;margin:0 0 6px;">${esc(r.destination)}</div>
+          <div style="font-size:18px;font-weight:700;color:#111827;margin:0 0 6px;">${esc(r.title)}</div>
+          ${r.shortDescription ? `<div style="font-size:14px;line-height:1.5;color:#4b5563;margin:0 0 12px;">${esc(r.shortDescription)}</div>` : ''}
+          <div style="font-size:13px;color:#6b7280;margin:0 0 14px;">by ${esc(r.author)}</div>
+          <span style="display:inline-block;background:#2563eb;color:#ffffff;font-size:14px;font-weight:600;padding:9px 16px;border-radius:8px;">View trip →</span>
+        </a>
+      </td></tr>`
+  }).join('')
+
+  return `<!doctype html><html><body style="margin:0;padding:0;background:#f3f4f6;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px;">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+          <tr><td style="padding:0 4px 20px;">
+            <div style="font-size:22px;font-weight:800;color:#111827;">Trips picked for you</div>
+            <div style="font-size:14px;color:#6b7280;margin-top:4px;">Based on the trips you've liked and created — here's where to go next.</div>
+          </td></tr>
+          ${cards}
+          <tr><td style="padding:8px 4px 0;">
+            <div style="font-size:12px;color:#9ca3af;">You're receiving this because you have a TravelManager account.
+            <a href="${baseUrl}" style="color:#6b7280;">Open TravelManager</a></div>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body></html>`
+}
+
 export async function handleNewsletter(payload) {
   control.newsletter.processed++
   control.newsletter.lastMessageAt = new Date().toISOString()
   const email = await resolveEmail(payload.userUid)
   const recs = payload.recommendations || []
+  const baseUrl = (process.env.APP_BASE_URL || 'https://onecloudaway.de').replace(/\/$/, '')
   const subject = `Trips picked for you — ${recs.length} ${recs.length === 1 ? 'idea' : 'ideas'}`
-  const lines = recs.map(r => `• ${r.title} (${r.destination}) by ${r.author}`)
+  const lines = recs.map(r => `• ${r.title} (${r.destination}) by ${r.author} — ${baseUrl}/trips/${r.id}`)
   const text = `Based on the trips you've liked and created, here's where to go next:\n\n${lines.join('\n')}`
+  const html = newsletterHtml(recs, baseUrl)
   let delivered = false
   if (email) {
-    try { delivered = await sendEmail(email, subject, text) }
+    try { delivered = await sendEmail(email, subject, text, html) }
     catch (e) { control.newsletter.errors++; console.error('[notify] newsletter email failed', e) }
   }
   if (delivered) control.newsletter.sent++
