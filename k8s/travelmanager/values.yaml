@@ -8,7 +8,9 @@ global:
   gcpProject: PROJECT_ID
   cloudSql:
     enabled: true                # local: false -> no sidecar, use in-cluster Postgres
-  extraEnv: []                   # local: [{name: PUBSUB_DISABLED, value:"1"}, ...]
+  extraEnv:                      # local: [{name: PUBSUB_DISABLED, value:"1"}, ...]
+    - name: FROM_EMAIL           # Resend sender — must be a verified domain
+      value: alerts@onecloudaway.de
 
 # In-cluster Postgres — LOCAL ONLY (kind/minikube). Prod uses Cloud SQL.
 postgres:
