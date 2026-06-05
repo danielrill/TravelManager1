@@ -5,6 +5,7 @@ import { getDb } from '@travelmanager/shared/db'
 import { invalidate } from '@travelmanager/shared/cache'
 import { publishEvent } from '@travelmanager/shared/pubsub'
 import { geocodeCity } from '@travelmanager/shared/geocode'
+import { updateTripEmbedding } from '../../utils/embedding.js'
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
@@ -51,6 +52,10 @@ export default defineEventHandler(async (event) => {
   )
 
   const trip = rows[0]
+  // Semantic embedding for recommendations — best-effort, fully decoupled from
+  // trip creation: any failure (no Vertex creds, pgvector absent) is swallowed
+  // and the backfill cron fills it later.
+  await updateTripEmbedding(db, trip).catch(() => {})
   invalidate('trips:all')   // bust the public feed cache (fire-and-forget)
   await publishEvent('TripCreated', {
     tripId: trip.id,

@@ -14,6 +14,7 @@ locals {
     "roles/pubsub.publisher",
     "roles/pubsub.subscriber",
     "roles/datastore.user",
+    "roles/aiplatform.user",          # Vertex AI embeddings for recommendations
     "roles/logging.logWriter",
     "roles/monitoring.metricWriter",
   ]

@@ -13,11 +13,13 @@
     "./identity": "./identity.js",
     "./pubsub": "./pubsub.js",
     "./tiers": "./tiers.js",
-    "./geocode": "./geocode.js"
+    "./geocode": "./geocode.js",
+    "./embed": "./embed.js"
   },
   "dependencies": {
     "@google-cloud/pubsub": "^4.7.0",
     "firebase-admin": "^11.11.0",
+    "google-auth-library": "^9.14.1",
     "h3": "^1.13.0",
     "ioredis": "^5.4.1",
     "pg": "^8.20.0"

@@ -22,6 +22,8 @@ from the per-service ExternalSecret (envFrom) so they are not rendered here.
   value: "8080"
 - name: GOOGLE_CLOUD_PROJECT
   value: {{ .Values.global.gcpProject | quote }}
+- name: VERTEX_LOCATION
+  value: {{ .Values.global.vertexLocation | default .Values.global.region | default "europe-west1" | quote }}
 - name: USER_SERVICE_URL
   value: "http://user-service:8080"
 - name: TRIP_SERVICE_URL

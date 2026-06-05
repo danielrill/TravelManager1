@@ -110,4 +110,19 @@ export async function initTripDb() {
       updated_at              TIMESTAMPTZ DEFAULT NOW()
     );
   `)
+
+  // pgvector: per-trip embeddings for semantic recommendations. Isolated in its
+  // own try (after the trips table exists) so a role lacking CREATE EXTENSION
+  // (Cloud SQL: enable once as cloudsqlsuperuser) never blocks service boot —
+  // embeddings simply stay unavailable until the extension is present.
+  try {
+    await db.query('CREATE EXTENSION IF NOT EXISTS vector')
+    await db.query(`
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS embedding vector(768);
+      CREATE INDEX IF NOT EXISTS trips_embedding_idx
+        ON trips USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+    `)
+  } catch (e) {
+    console.error('[trip-service] pgvector setup skipped (embeddings disabled):', e?.message || e)
+  }
 }

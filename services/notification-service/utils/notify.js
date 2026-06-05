@@ -63,9 +63,10 @@ export async function handleNewsletter(payload) {
   control.newsletter.processed++
   control.newsletter.lastMessageAt = new Date().toISOString()
   const email = await resolveEmail(payload.userUid)
-  const subject = `Your weekly travel feed — ${payload.entryCount} new updates`
-  const lines = (payload.highlights || []).map(h => `• ${h.title} (${h.destination}) by ${h.author}`)
-  const text = `Here's what travellers you follow have been planning:\n\n${lines.join('\n')}`
+  const recs = payload.recommendations || []
+  const subject = `Trips picked for you — ${recs.length} ${recs.length === 1 ? 'idea' : 'ideas'}`
+  const lines = recs.map(r => `• ${r.title} (${r.destination}) by ${r.author}`)
+  const text = `Based on the trips you've liked and created, here's where to go next:\n\n${lines.join('\n')}`
   let delivered = false
   if (email) {
     try { delivered = await sendEmail(email, subject, text) }

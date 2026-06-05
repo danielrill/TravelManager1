@@ -33,6 +33,7 @@ resource "google_project_service" "required" {
     "redis.googleapis.com",
     "secretmanager.googleapis.com",
     "sqladmin.googleapis.com",
+    "aiplatform.googleapis.com",     # Vertex AI text embeddings (recommendations)
   ])
   project            = var.project_id
   service            = each.value

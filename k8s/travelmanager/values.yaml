@@ -134,6 +134,9 @@ cronJobs:
   newsletter:
     schedule: "0 8 * * 1"          # Monday 08:00
     target: "http://social-service:8080/api/tasks/newsletter"
+  backfill-embeddings:
+    schedule: "0 */6 * * *"        # every 6h — fills trips missing an embedding
+    target: "http://trip-service:8080/api/tasks/backfill-embeddings"
 
 resources:
   requests: { cpu: 100m, memory: 192Mi }
