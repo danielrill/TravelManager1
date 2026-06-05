@@ -25,7 +25,7 @@ redis:
 pgbouncer:
   enabled: true
   replicas: 2
-  image: edoburu/pgbouncer:1.24.1
+  image: edoburu/pgbouncer:v1.24.1-p1
   poolMode: transaction
   maxClientConn: 1000
   defaultPoolSize: 20
