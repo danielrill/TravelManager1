@@ -8,8 +8,12 @@ on:
       - 'packages/**'
       - 'app/**'
       - 'k8s/**'
+      - 'tests/**'
       - 'Dockerfile'
       - 'Dockerfile.service'
+      - 'vitest.config.js'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
@@ -29,6 +33,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
       - run: npm install
+      - name: Unit tests
+        run: npm run test
       - name: Build all services (compile check)
         run: |
           for s in api-gateway user-service trip-service destination-service \

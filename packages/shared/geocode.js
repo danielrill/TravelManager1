@@ -9,7 +9,7 @@
 const CACHE = new Map()
 
 // Take the first place when a destination is a list ("Vienna & Salzburg").
-function primaryPlace(raw) {
+export function primaryPlace(raw) {
   if (!raw) return ''
   return String(raw)
     .split(/\s*(?:&|,|\/|\sund\s|\sand\s)\s*/i)[0]

@@ -4,7 +4,7 @@ import { control } from './control.js'
 
 // Relevance score: base 1.0 for a followed author, recency bonus decaying over
 // 30 days. Kept simple and deterministic so the feed is explainable.
-function score(startDate) {
+export function score(startDate) {
   const ts = Date.parse(startDate)
   if (Number.isNaN(ts)) return 1 // no recency bonus for unparseable/missing dates
   const days = Math.max(0, (ts - Date.now()) / 86400000)

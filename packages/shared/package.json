@@ -17,11 +17,13 @@
     "./embed": "./embed.js"
   },
   "dependencies": {
-    "@google-cloud/pubsub": "^4.7.0",
-    "firebase-admin": "^11.11.0",
+    "@google-cloud/pubsub": "^5.3.1",
+    "@vitest/coverage-v8": "4.1.8",
+    "firebase-admin": "^10.3.0",
     "google-auth-library": "^9.14.1",
     "h3": "^1.13.0",
     "ioredis": "^5.4.1",
-    "pg": "^8.20.0"
+    "pg": "^8.20.0",
+    "vitest": "4.1.8"
   }
 }

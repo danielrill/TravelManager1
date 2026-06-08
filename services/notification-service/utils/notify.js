@@ -93,7 +93,7 @@ export async function handleTravelAlert(payload) {
 }
 
 // Escape user-supplied strings before inlining into HTML (trip titles etc).
-function esc(s) {
+export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ))
@@ -101,7 +101,7 @@ function esc(s) {
 
 // Build the responsive, inline-styled HTML newsletter. Each trip is a clickable
 // card linking to its detail page on the site.
-function newsletterHtml(recs, baseUrl) {
+export function newsletterHtml(recs, baseUrl) {
   const cards = recs.map((r) => {
     const url = `${baseUrl}/trips/${encodeURIComponent(r.id)}`
     return `
