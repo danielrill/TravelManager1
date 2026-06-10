@@ -161,7 +161,6 @@ serviceSecrets:
     REDIS_URL: redis-url
   trip-service:
     DATABASE_URL: trip-database-url
-    RAPIDAPI_KEY: rapidapi-key
     GOOGLE_MAPS_SERVER_KEY: google-maps-server-key
     FIREBASE_SERVICE_ACCOUNT: firebase-service-account
     REDIS_URL: redis-url

@@ -28,7 +28,6 @@
         <button v-if="detailMarkers.length" class="trip-subnav-item" @click="scrollToSection('sec-map')">Map</button>
         <button class="trip-subnav-item" @click="scrollToSection('sec-social')">Community</button>
         <button class="trip-subnav-item" @click="scrollToSection('sec-reviews')">Reviews</button>
-        <button class="trip-subnav-item" @click="scrollToSection('sec-offers')">Offers</button>
         <button class="trip-subnav-item" @click="scrollToSection('sec-plan')">Plan</button>
       </nav>
 
@@ -165,15 +164,6 @@
           </div>
         </div>
         <p v-else class="reviews-empty">No reviews yet. Be the first to share your thoughts!</p>
-      </div>
-
-      <!-- ── Live Offers section ── -->
-      <div id="sec-offers" class="live-offers-section">
-        <LiveOffers
-          :origin="trip.origin"
-          :destination="trip.destination"
-          :date-from="trip.start_date"
-        />
       </div>
 
       <!-- ── Travel Plan section ── -->
@@ -602,16 +592,8 @@ function accommodationIcon(t) { return ACCOMMODATION_ICONS[t] ?? '🏠' }
   color: var(--navy);
 }
 /* Sections clear the sticky navbar + subnav when jumped to */
-#sec-overview, #sec-map, #sec-social, #sec-reviews, #sec-offers, #sec-plan {
+#sec-overview, #sec-map, #sec-social, #sec-reviews, #sec-plan {
   scroll-margin-top: 120px;
-}
-
-.live-offers-section {
-  background: var(--white);
-  border-radius: var(--radius);
-  padding: 28px 36px;
-  box-shadow: var(--shadow);
-  margin-top: 24px;
 }
 
 .map-section {

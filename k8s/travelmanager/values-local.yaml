@@ -58,7 +58,6 @@ localSecretValues:
     REDIS_URL: redis://redis:6379
   trip-service:
     DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_trip
-    RAPIDAPI_KEY: ""
     FIREBASE_SERVICE_ACCOUNT: "{}"
     REDIS_URL: redis://redis:6379
   destination-service:

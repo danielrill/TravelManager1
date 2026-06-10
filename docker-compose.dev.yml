@@ -59,7 +59,6 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@pgbouncer:6432/travelmanager_trip
       DESTINATION_SERVICE_URL: http://destination-service:8080
-      RAPIDAPI_KEY: ${RAPIDAPI_KEY:-}
       REDIS_URL: redis://redis:6379
       PUBSUB_DISABLED: "1"
       # Vertex AI embeddings: off by default (no creds). To enable real semantic

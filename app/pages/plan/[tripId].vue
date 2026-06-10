@@ -184,13 +184,6 @@
           </button>
         </div>
 
-        <LiveOffers
-          :tabs="['flights', 'buses']"
-          :origin="trip?.origin"
-          :destination="sel.destination?.city || sel.destination?.country"
-          :date-from="trip?.start_date"
-        />
-
         <div class="wizard-nav">
           <button class="btn btn-secondary" @click="step = 2">← Route</button>
           <button class="btn btn-gold" :disabled="!sel.transport" @click="step = 4">
@@ -232,12 +225,6 @@
             <span v-if="sel.accommodation?.id === a.id" class="selected-badge">✓ Selected</span>
           </button>
         </div>
-
-        <LiveOffers
-          :tabs="['hotels']"
-          :destination="sel.destination?.city || sel.destination?.country"
-          :date-from="trip?.start_date"
-        />
 
         <div class="wizard-nav">
           <button class="btn btn-secondary" @click="step = 3">← Transport</button>
@@ -411,16 +398,6 @@
           </button>
         </div>
 
-        <LiveOffers
-          selectable
-          :tabs="['flights', 'buses', 'hotels']"
-          :default-tab="custom.transport_type === 'bus' ? 'buses' : 'flights'"
-          :origin="trip?.origin"
-          :destination="trip?.destination"
-          :date-from="trip?.start_date"
-          @select="onTransportPanelSelect"
-        />
-
         <div class="custom-form">
           <div class="cf-row">
             <label>Provider / carrier</label>
@@ -475,16 +452,6 @@
             {{ accommodationIcon(t) }} {{ t }}
           </button>
         </div>
-
-        <LiveOffers
-          selectable
-          :tabs="['flights', 'buses', 'hotels']"
-          default-tab="hotels"
-          :origin="trip?.origin"
-          :destination="trip?.destination"
-          :date-from="trip?.start_date"
-          @select="onAccommodationPanelSelect"
-        />
 
         <div class="custom-form">
           <div class="cf-row">
@@ -682,9 +649,9 @@ const savedConfirm = ref(false)
 // returning. Drives the .dir-fwd / .dir-back classes on the steps wrapper.
 const direction = ref('fwd')
 
-// Each step can be a very different height (the LiveOffers panel is tall), so
-// jump back to the top on every change — the user always lands on the new
-// step's heading instead of somewhere mid-page. Honours reduced-motion.
+// Steps vary a lot in height, so jump back to the top on every change — the
+// user always lands on the new step's heading instead of somewhere mid-page.
+// Honours reduced-motion.
 watch(step, (to, from) => {
   direction.value = to >= from ? 'fwd' : 'back'
   if (!import.meta.client) return
@@ -885,45 +852,6 @@ function goToStep(n) {
 const customRouteValid = computed(() => !!custom.route_name.trim() && !!custom.duration_days)
 const customTransportValid = computed(() => !!custom.transport_type)
 const customAccomValid = computed(() => !!custom.accommodation_type && !!custom.accommodation_name.trim())
-
-// ── LiveOffers @select handlers — auto-fill custom-mode fields ──────────────
-function priceToNumber(p) {
-  if (p == null) return ''
-  if (typeof p === 'number') return p
-  const match = String(p).replace(/,/g, '').match(/[\d.]+/)
-  return match ? Number(match[0]) : ''
-}
-
-function fillCustomTransport({ kind, offer }) {
-  custom.transport_type       = kind === 'flights' ? 'flight' : 'bus'
-  custom.transport_provider   = offer.airline || offer.provider || ''
-  custom.transport_duration   = offer.duration || ''
-  custom.transport_price_from = priceToNumber(offer.price)
-  custom.transport_notes      = offer.bookingLink
-    ? `Booked via: ${offer.bookingLink}`
-    : custom.transport_notes
-}
-
-function fillCustomAccommodation({ offer }) {
-  custom.accommodation_name            = offer.name || ''
-  custom.accommodation_price_per_night = priceToNumber(offer.price)
-  custom.accommodation_rating          = offer.rating ? Number(offer.rating) : ''
-  custom.accommodation_notes           = offer.bookingLink
-    ? `Booked via: ${offer.bookingLink}`
-    : custom.accommodation_notes
-  if (!custom.accommodation_type) custom.accommodation_type = 'hotel'
-}
-
-// Either custom-mode panel renders all three tabs now, so route the select
-// event to the right filler based on the tab the offer came from.
-function onTransportPanelSelect(evt) {
-  if (evt.kind === 'hotels') fillCustomAccommodation(evt)
-  else                       fillCustomTransport(evt)
-}
-function onAccommodationPanelSelect(evt) {
-  if (evt.kind === 'hotels') fillCustomAccommodation(evt)
-  else                       fillCustomTransport(evt)
-}
 
 // ── Save ─────────────────────────────────────────────────────────────────────
 async function savePlan() {

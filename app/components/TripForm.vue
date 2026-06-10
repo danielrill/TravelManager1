@@ -33,7 +33,7 @@
           ref="originInput"
           v-model="form.origin"
           type="text"
-          placeholder="Start typing a city… — used for real flights & buses"
+          placeholder="Start typing a city… (optional, where you're travelling from)"
           autocomplete="off"
         />
       </div>
@@ -58,16 +58,6 @@
         placeholder='e.g. "Explore the fjords of southern Norway."'
         required
       />
-    </div>
-
-    <div class="form-group">
-      <label for="detail_description">Detailed Description</label>
-      <textarea
-        id="detail_description"
-        v-model="form.detail_description"
-        rows="7"
-        placeholder="Full trip details, transport, accommodation, itinerary…"
-      ></textarea>
     </div>
 
     <div class="form-error" v-if="error">{{ error }}</div>
@@ -98,7 +88,6 @@ const form = reactive({
   origin: props.trip?.origin ?? '',
   start_date: props.trip?.start_date ?? '',
   short_description: props.trip?.short_description ?? '',
-  detail_description: props.trip?.detail_description ?? '',
   // Coords captured when a place is picked from the autocomplete. Sent to the
   // API so the server trusts the chosen point instead of re-geocoding text.
   dest_lat: props.trip?.dest_lat ?? null,

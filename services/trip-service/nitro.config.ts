@@ -8,7 +8,6 @@ export default defineNitroConfig({
   },
   runtimeConfig: {
     serviceName: 'trip-service',
-    rapidApiKey: process.env.RAPIDAPI_KEY ?? '',
     destinationServiceUrl: process.env.DESTINATION_SERVICE_URL || 'http://localhost:3003',
   },
 })
