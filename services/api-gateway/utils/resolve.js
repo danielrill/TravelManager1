@@ -15,7 +15,9 @@ export async function resolveTenantPlan(uid) {
     let plan = 'free'
 
     try {
-      const u = await $fetch(`/api/users/${uid}`, { baseURL: userUrl })
+      // Internal endpoint exposes tenant_id + role; the public /api/users/:id omits
+      // them, so the membership guard must read this one.
+      const u = await $fetch(`/api/internal/users/${uid}`, { baseURL: userUrl })
       tenantId = u.tenant_id || 'default'
       role = u.role || 'traveler'
     } catch {

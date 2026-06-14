@@ -2,7 +2,7 @@
 // Computed at query time (follows live here, trips are fetched from the Trip
 // service) so it works without Pub/Sub and reflects follows + existing trips
 // immediately. Gated to Standard+ at the gateway; enforced here too.
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 import { planAllows } from '@travelmanager/shared/tiers'
 
 export default defineEventHandler(async (event) => {
@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'The personalized feed requires the Standard plan or higher' })
   }
 
-  const db = getDb()
+  const db = tenantDb(event)
   const { rows: follows } = await db.query(
     'SELECT followee_uid FROM follows WHERE follower_uid = $1',
     [user.uid]
@@ -27,6 +27,9 @@ export default defineEventHandler(async (event) => {
   // stay stable across requests (infinite scroll). Forward the params through.
   const trips = await $fetch('/api/internal/trips-by-authors', {
     baseURL: tripServiceUrl,
+    // Forward the tenant so trip-service reads the SAME tenant's pod, not the
+    // shared DB. Without this header the feed would mix in free-tier trips.
+    headers: { 'x-tenant-id': user.tenantId || 'default' },
     query: {
       uids,
       ...(q && String(q).trim() ? { q: String(q).trim() } : {}),

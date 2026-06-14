@@ -28,6 +28,8 @@ export default defineEventHandler(async (event) => {
   const base = process.env.TRIP_SERVICE_URL || 'http://localhost:3002'
   const stats = await $fetch('/api/internal/destination-stats', {
     baseURL: base,
+    // Scope the aggregate to the caller's tenant (their trips live in their pod).
+    headers: { 'x-tenant-id': user.tenantId || 'default' },
     query: { city: dest.city, country: dest.country },
   }).catch((e) => {
     console.error('[b2b] trip stats fetch failed', e)

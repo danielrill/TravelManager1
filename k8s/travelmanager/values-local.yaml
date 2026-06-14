@@ -10,6 +10,14 @@ global:
   imageTag: local
   imagePullPolicy: IfNotPresent
   gcpProject: local
+  # kind is a real cluster with a k8s API, so the provisioner CAN create per-tenant
+  # Postgres pods locally (needs the tenant-db-credential secret + provisioner RBAC,
+  # both present). NetworkPolicy isn't enforced by kindnet, but that's fine locally.
+  provisionerK8sEnabled: true
+  # Local hosts are *.localhost (Chrome resolves them to 127.0.0.1), so the gateway
+  # parses subdomains against localhost, not onecloudaway.de. admin.localhost → admin,
+  # tui.localhost → tui, localhost → apex/free.
+  rootDomain: localhost
   cloudSql:
     enabled: false
   extraEnv:

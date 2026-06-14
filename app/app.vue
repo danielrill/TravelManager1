@@ -1,6 +1,20 @@
 <template>
   <div class="app">
-    <nav v-if="hydrated && user" class="navbar">
+    <!-- Operator console nav: brand + Logout only. No profile, plan or tenant
+         navigation — the admin host exposes nothing tenant-related. -->
+    <nav v-if="hydrated && user && isAdminHost" class="navbar">
+      <div class="nav-left"></div>
+      <NuxtLink to="/admin" class="nav-brand">
+        <img src="/logo_banner.png" alt="One Cloud Away" class="brand-logo" />
+        <span class="brand-text">One Cloud Away</span>
+        <span class="admin-tag">OPERATOR</span>
+      </NuxtLink>
+      <div class="nav-right">
+        <button class="nav-btn-logout" @click="handleLogout">Logout</button>
+      </div>
+    </nav>
+
+    <nav v-else-if="hydrated && user" class="navbar">
 
       <!-- Left: Hamburger -->
       <div class="nav-left">
@@ -65,6 +79,7 @@ const { user, logout } = useAuth()
 const router = useRouter()
 const hydrated = ref(false)
 const menuOpen = ref(false)
+const isAdminHost = useAdminHost()
 
 // White-label logo (set by plugins/whitelabel.client.js) + role-gated nav.
 const brandLogo = useState('brandLogo', () => null)
@@ -245,6 +260,18 @@ a { color: inherit; text-decoration: none; }
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+.admin-tag {
+  margin-left: 4px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--navy);
+  background: var(--gold);
+  padding: 3px 8px;
+  border-radius: 100px;
+  line-height: 1;
 }
 
 

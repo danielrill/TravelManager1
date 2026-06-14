@@ -3,23 +3,26 @@ import type { Serialize, Simplify } from "nitropack/types";
 declare module "nitropack/types" {
   type Awaited<T> = T extends PromiseLike<infer U> ? Awaited<U> : T
   interface InternalApi {
-    '/api/buses': {
-      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/buses/index.get').default>>>>
-    }
-    '/api/flights': {
-      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/flights/index.get').default>>>>
-    }
     '/api/health': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/health.get').default>>>>
-    }
-    '/api/hotels': {
-      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/hotels/index.get').default>>>>
     }
     '/api/internal/active-trips': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/active-trips.get').default>>>>
     }
+    '/api/internal/backfill-geocode': {
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/backfill-geocode.post').default>>>>
+    }
     '/api/internal/destination-stats': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/destination-stats.get').default>>>>
+    }
+    '/api/internal/provision': {
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/provision.post').default>>>>
+    }
+    '/api/internal/recommended': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/recommended.get').default>>>>
+    }
+    '/api/internal/trips-by-authors': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/trips-by-authors.get').default>>>>
     }
     '/api/likes/trip/:tripId': {
       'delete': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/likes/trip/[tripId].delete').default>>>>
@@ -34,10 +37,16 @@ declare module "nitropack/types" {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/locations/trip/[tripId].get').default>>>>
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/locations/trip/[tripId].post').default>>>>
     }
+    '/api/ready': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/ready.get').default>>>>
+    }
     '/api/reviews/trip/:tripId': {
       'delete': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/reviews/trip/[tripId].delete').default>>>>
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/reviews/trip/[tripId].get').default>>>>
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/reviews/trip/[tripId].post').default>>>>
+    }
+    '/api/tasks/backfill-embeddings': {
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/tasks/backfill-embeddings.post').default>>>>
     }
     '/api/travel-plans/:tripId': {
       'delete': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/travel-plans/[tripId].delete').default>>>>
@@ -55,6 +64,9 @@ declare module "nitropack/types" {
     '/api/trips': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/trips/index.get').default>>>>
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/trips/index.post').default>>>>
+    }
+    '/api/trips/recommended': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/trips/recommended.get').default>>>>
     }
   }
 }

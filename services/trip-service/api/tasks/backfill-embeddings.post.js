@@ -2,13 +2,14 @@
 // it: pre-existing trips, create/update-time embed failures, and the first run
 // after Vertex creds land. Idempotent, batched, safe to re-run on a schedule.
 // Internal task endpoint (CronJob); not routed through the public gateway.
-import { getDb } from '@travelmanager/shared/db'
+//
+// Runs once per tenant (shared free DB + each provisioned tenant pod) so standard
+// tenants' trips get embeddings too.
+import { forEachTenant } from '@travelmanager/shared/tenant-db'
 import { embedBatch, toVectorLiteral } from '@travelmanager/shared/embed'
 import { tripText } from '../../utils/embedding.js'
 
-export default defineEventHandler(async () => {
-  const db = getDb()
-
+async function backfillOne(db) {
   let rows
   try {
     ;({ rows } = await db.query(
@@ -33,4 +34,11 @@ export default defineEventHandler(async () => {
   }
 
   return { ok: true, scanned: rows.length, updated }
+}
+
+export default defineEventHandler(async () => {
+  const perTenant = await forEachTenant((db) => backfillOne(db))
+  const scanned = perTenant.reduce((n, t) => n + (t.result?.scanned || 0), 0)
+  const updated = perTenant.reduce((n, t) => n + (t.result?.updated || 0), 0)
+  return { ok: true, tenants: perTenant.length, scanned, updated }
 })

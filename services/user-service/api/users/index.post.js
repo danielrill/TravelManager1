@@ -13,13 +13,16 @@ export default defineEventHandler(async (event) => {
 
   const db = getDb()
 
+  // New users always start in the free 'default' tenant — NOT the host tenant.
+  // Joining a standard tenant is gated by an access code (POST /api/tenants/join),
+  // so creating a profile on a subdomain must not silently grant membership.
   const { rows } = await db.query(
     `INSERT INTO users (firebase_uid, email, name, tenant_id)
-     VALUES ($1, $2, $3, $4)
+     VALUES ($1, $2, $3, 'default')
      ON CONFLICT (firebase_uid) DO UPDATE
        SET email = EXCLUDED.email
      RETURNING firebase_uid, email, name, bio, home_city, avatar_url, tenant_id, role, created_at`,
-    [ctx.uid, ctx.email ?? '', name?.trim() ?? ctx.name ?? ctx.email ?? '', ctx.tenantId ?? 'default']
+    [ctx.uid, ctx.email ?? '', name?.trim() ?? ctx.name ?? ctx.email ?? '']
   )
 
   invalidate(`user:${ctx.uid}`)   // bust public profile cache (fire-and-forget)

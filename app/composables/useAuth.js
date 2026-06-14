@@ -24,6 +24,17 @@ export const useAuth = () => {
   }
 
   const _hydrateProfile = async (fbUser) => {
+    // Admin host: no tenant/profile API is reachable (the gateway 404s everything
+    // but /api/admin). Identify the operator from Firebase alone — never fetch a
+    // profile, plan or tenant here.
+    if (useAdminHost()) {
+      user.value = {
+        firebase_uid: fbUser.uid,
+        email: fbUser.email,
+        name: fbUser.displayName ?? fbUser.email,
+      }
+      return
+    }
     const token = await fbUser.getIdToken()
     try {
       user.value = await $fetch('/api/users/me', {
@@ -79,12 +90,16 @@ export const useAuth = () => {
     const auth = getAuth()
     const provider = new GoogleAuthProvider()
     const result = await signInWithPopup(auth, provider)
-    const token = await result.user.getIdToken()
-    await $fetch('/api/users', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: { name: result.user.displayName ?? result.user.email },
-    })
+    // Skip the user-row upsert on the admin host — /api/users is blocked there and
+    // operators don't need a tenant profile row.
+    if (!useAdminHost()) {
+      const token = await result.user.getIdToken()
+      await $fetch('/api/users', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: { name: result.user.displayName ?? result.user.email },
+      })
+    }
     await _hydrateProfile(result.user)
     authReady.value = true
   }

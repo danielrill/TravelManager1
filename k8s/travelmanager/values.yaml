@@ -16,6 +16,26 @@ global:
     enabled: true                # local: false -> no sidecar, use in-cluster Postgres
   extraEnv: []                   # local: [{name: PUBSUB_DISABLED, value:"1"}, ...]
 
+  # --- Multitenancy ---
+  # Apex domain; the gateway derives the tenant from the subdomain of the Host.
+  rootDomain: onecloudaway.de
+  # Comma-separated operator emails allowed on admin.onecloudaway.de + /api/admin.
+  adminEmails: "kaicikoglu@gmail.com"
+  # Provisioner creates a dedicated Postgres pod per standard tenant via the k8s
+  # API. Enabled in-cluster; disabled locally (no API access / single Postgres).
+  provisionerK8sEnabled: true
+  # Shared cluster-internal credential for tenant Postgres pods (v1; NetworkPolicy
+  # isolates the pods). Secret holds keys: username, password. Hardening: per-tenant.
+  tenantDbSecret: tenant-db-credential
+  tenantDbHostSuffix: ""         # e.g. .travelmanager.svc.cluster.local (cross-namespace)
+  # Standard tenants get their OWN application pods (compute isolation) alongside
+  # their Postgres pod — the provisioner creates a Deployment+Service+HPA per
+  # backend service named <svc>-<tenant>. Each tenant deployment scales 1→2.
+  # All on the same GKE cluster. Toggle off to fall back to shared app pods.
+  tenantDedicatedPods: true
+  tenantAppHpaMin: 1
+  tenantAppHpaMax: 2
+
 # In-cluster Postgres — LOCAL ONLY (kind/minikube). Prod uses Cloud SQL.
 postgres:
   enabled: false
@@ -73,8 +93,16 @@ externalSecrets:
 ingress:
   enabled: true
   className: gce                 # local: nginx
-  managedCert: true              # local: false
-  host: onecloudaway.de
+  managedCert: false             # superseded by the wildcard pre-shared cert
+  # Empty host = the single rule matches ANY Host, so every tenant subdomain
+  # (tui.onecloudaway.de, admin.onecloudaway.de, …) routes through the same
+  # /api→gateway, /→frontend paths. The gateway differentiates by Host.
+  host: ""
+  # Wildcard cert *.onecloudaway.de (+ apex) created once in GCP Certificate
+  # Manager and referenced by name — covers all current/future subdomains, so
+  # onboarding a tenant needs no cert/DNS change. Requires a wildcard DNS A record
+  # *.onecloudaway.de → the static IP.
+  preSharedCert: travelmanager-wildcard-cert
   staticIpName: travelmanager-ip
   managedCertName: travelmanager-cert
 
@@ -82,52 +110,58 @@ ingress:
 syncServices:
   api-gateway:
     port: 8080
-    replicas: 2
     db: false
     healthPath: /healthz
-    hpa: { min: 2, max: 10, cpu: 70 }
+    hpa: { min: 1, max: 4, cpu: 70 }
   user-service:
     port: 8080
     db: true
     healthPath: /api/health      # liveness — always 200 while process is up
     readinessPath: /api/ready    # readiness — 503 until DB schema bootstrapped
-    hpa: { min: 2, max: 8, cpu: 70 }
+    hpa: { min: 1, max: 4, cpu: 70 }
   trip-service:
     port: 8080
     db: true
     healthPath: /api/health
     readinessPath: /api/ready
-    hpa: { min: 2, max: 10, cpu: 70 }
+    hpa: { min: 1, max: 4, cpu: 70 }
   destination-service:
     port: 8080
     db: true
     healthPath: /api/health
     readinessPath: /api/ready
-    hpa: { min: 2, max: 6, cpu: 70 }
+    hpa: { min: 1, max: 4, cpu: 70 }
   frontend:
     port: 8080
     db: false
     healthPath: /
-    hpa: { min: 2, max: 6, cpu: 70 }
+    hpa: { min: 1, max: 4, cpu: 70 }
+  # Holds k8s RBAC to create per-tenant Postgres pods. No shared DB of its own
+  # (talks to tenant pods + user-service). Single replica — provisioning is rare.
+  provisioner-service:
+    port: 8080
+    db: false
+    replicas: 1
+    healthPath: /api/health
+    readinessPath: /api/ready
 
 # Async worker services: HTTP listener (control + push) + Pub/Sub subscribers.
 workerServices:
   social-service:
     port: 8080
     db: true
-    replicas: 2
     readinessPath: /api/ready    # 503 until DB schema bootstrapped
+    hpa: { min: 1, max: 4, cpu: 70 }
   travel-info-service:
     port: 8080
     db: true
-    replicas: 2
     readinessPath: /api/ready
-    hpa: { min: 2, max: 6, cpu: 70 }
+    hpa: { min: 1, max: 4, cpu: 70 }
   notification-service:
     port: 8080
     db: true
-    replicas: 2
     readinessPath: /api/ready
+    hpa: { min: 1, max: 4, cpu: 70 }
 
 # Scheduled jobs. They POST to a service's task endpoint.
 cronJobs:

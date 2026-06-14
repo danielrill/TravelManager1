@@ -4,7 +4,7 @@
 // title / destination / author_name; ?limit=/&offset= paginate (infinite
 // scroll). Internal feed source for the Social service (query-time feed); not
 // routed through the public gateway.
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 const PAGE = 24
 const MAX_PAGE = 100
@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
             COALESCE(like_count, 0) AS like_count, created_at
      FROM trips`
 
-  const db = getDb()
+  const db = tenantDb(event)
 
   if (q && String(q).trim()) {
     const search = `%${String(q).trim()}%`

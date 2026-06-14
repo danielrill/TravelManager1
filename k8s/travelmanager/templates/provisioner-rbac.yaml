@@ -1,0 +1,41 @@
+{{- if index .Values.syncServices "provisioner-service" }}
+# RBAC for the provisioner: it creates a dedicated Postgres pod per standard
+# tenant via the k8s API. Scoped tightly to the app namespace and to exactly the
+# resources/verbs it needs — no cluster-wide permissions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: travelmanager-provisioner
+  labels:
+    {{- include "tm.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["apps"]
+    # statefulsets: per-tenant Postgres pod. deployments: per-tenant app pods.
+    resources: ["statefulsets", "statefulsets/status", "deployments", "deployments/status"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["autoscaling"]
+    # per-tenant app Deployment autoscalers (1→2 per service).
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: travelmanager-provisioner
+  labels:
+    {{- include "tm.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: travelmanager
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: travelmanager-provisioner
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

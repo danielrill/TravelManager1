@@ -6,10 +6,10 @@
 // user created + liked drives a pgvector cosine-similarity search. New users, or
 // a DB without embeddings/pgvector, fall through to a popularity ranking. See
 // utils/recommend.js.
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 import { recommendForUser } from '../../utils/recommend.js'
 
 export default defineEventHandler(async (event) => {
   const me = event.context.user?.uid || null
-  return recommendForUser(getDb(), me, { limit: 30 })
+  return recommendForUser(tenantDb(event), me, { limit: 30 })
 })

@@ -1,12 +1,12 @@
 // DELETE /api/feed/follows/:uid — unfollow.
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
   if (!user?.uid) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
   const followee = getRouterParam(event, 'uid')
-  const db = getDb()
+  const db = tenantDb(event)
   await db.query(
     'DELETE FROM follows WHERE follower_uid = $1 AND followee_uid = $2',
     [user.uid, followee]

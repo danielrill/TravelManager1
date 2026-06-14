@@ -1,8 +1,9 @@
 // Social DB schema. Follow graph + precomputed feed entries + newsletter log.
 import { getDb } from '@travelmanager/shared/db'
 
-export async function initSocialDb() {
-  const db = getDb()
+// Accepts an optional pool so the provisioner can run this DDL against a new
+// tenant's dedicated Postgres pod; defaults to the shared pool at bootstrap.
+export async function initSocialDb(db = getDb()) {
   await db.query(`
     CREATE TABLE IF NOT EXISTS follows (
       follower_uid TEXT        NOT NULL,

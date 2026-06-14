@@ -1,7 +1,7 @@
 // POST /api/trips — create a trip owned by the authenticated user.
 // Denormalises author_name from the gateway identity (no users table here) and
 // publishes a TripCreated event for the Social feed builder.
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 import { invalidatePattern } from '@travelmanager/shared/cache'
 import { publishEvent } from '@travelmanager/shared/pubsub'
 import { geocodeCity } from '@travelmanager/shared/geocode'
@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
   const lng = Number.isFinite(dest_lng) ? dest_lng : (geo?.lng ?? null)
   const destCountry = geo?.country ?? null
 
-  const db = getDb()
+  const db = tenantDb(event)
   const { rows } = await db.query(
     `INSERT INTO trips
      (user_uid, author_name, title, destination, origin, start_date, short_description, detail_description, dest_lat, dest_lng, dest_country)
@@ -56,15 +56,20 @@ export default defineEventHandler(async (event) => {
   // trip creation: any failure (no Vertex creds, pgvector absent) is swallowed
   // and the backfill cron fills it later.
   await updateTripEmbedding(db, trip).catch(() => {})
-  invalidatePattern('trips:all')   // bust all paged public-feed caches (fire-and-forget)
+  invalidatePattern(`trips:all:${user.tenantId || 'default'}`)   // bust this tenant's paged feed caches
+  // tenantId travels with the event so the (event-less) feed builder fans out
+  // into the correct tenant's DB pod — without it, a standard tenant's trip
+  // would leak into the shared free feed.
+  const tenantId = event.context.user?.tenantId || 'default'
   await publishEvent('TripCreated', {
     tripId: trip.id,
+    tenantId,
     userUid: trip.user_uid,
     authorName: trip.author_name,
     title: trip.title,
     destination: trip.destination,
     startDate: trip.start_date,
-  }, { tripId: String(trip.id) }).catch((e) => console.error('[trip-service] publish TripCreated failed', e))
+  }, { tripId: String(trip.id), tenantId }).catch((e) => console.error('[trip-service] publish TripCreated failed', e))
 
   return trip
 })

@@ -1,0 +1,380 @@
+// Kubernetes provisioning of a per-tenant Postgres pod. Creates a StatefulSet +
+// headless Service + PVC (+ NetworkPolicy) named postgres-<id>. Idempotent: an
+// already-existing object (409) is treated as success so provisioning is safe to
+// retry. Disabled (PROVISIONER_K8S_ENABLED!=1) for local dev where there is no
+// cluster — callers then assume the DB host already exists.
+import k8s from '@kubernetes/client-node'
+
+const SCHEMA_NS = process.env.PROVISIONER_NAMESPACE || 'default'
+// pgvector image so per-tenant trip embeddings (recommendations) work; the trip
+// schema's CREATE EXTENSION vector self-disables if it's ever absent.
+const PG_IMAGE = process.env.TENANT_PG_IMAGE || 'pgvector/pgvector:pg16'
+const PG_STORAGE = process.env.TENANT_PG_STORAGE || '5Gi'
+const STORAGE_CLASS = process.env.TENANT_PG_STORAGE_CLASS || undefined
+
+export function k8sEnabled() {
+  return process.env.PROVISIONER_K8S_ENABLED === '1'
+}
+
+function clients() {
+  const kc = new k8s.KubeConfig()
+  kc.loadFromCluster() // in-cluster ServiceAccount
+  return {
+    apps: kc.makeApiClient(k8s.AppsV1Api),
+    core: kc.makeApiClient(k8s.CoreV1Api),
+    net: kc.makeApiClient(k8s.NetworkingV1Api),
+    autoscaling: kc.makeApiClient(k8s.AutoscalingV2Api),
+  }
+}
+
+// Treat 409 (AlreadyExists) as success so the whole flow is idempotent.
+async function ignoreConflict(p) {
+  try {
+    return await p
+  } catch (e) {
+    const code = e?.statusCode || e?.response?.statusCode || e?.body?.code
+    if (code === 409) return null
+    throw e
+  }
+}
+
+// Treat 404 (NotFound) as success so teardown is idempotent / safe to re-run.
+async function ignoreMissing(p) {
+  try {
+    return await p
+  } catch (e) {
+    const code = e?.statusCode || e?.response?.statusCode || e?.body?.code
+    if (code === 404) return null
+    throw e
+  }
+}
+
+// Labels every tenant Postgres workload must carry. part-of=travelmanager is
+// REQUIRED — the cluster NetworkPolicy drops traffic from pods without it.
+function labels(id) {
+  return {
+    app: `postgres-${id}`,
+    'app.kubernetes.io/part-of': 'travelmanager',
+    'travelmanager.tenant': id,
+  }
+}
+
+function statefulSet(id, secretName) {
+  const name = `postgres-${id}`
+  const l = labels(id)
+  return {
+    apiVersion: 'apps/v1',
+    kind: 'StatefulSet',
+    metadata: { name, labels: l },
+    spec: {
+      serviceName: name,
+      replicas: 1,
+      selector: { matchLabels: { app: name } },
+      template: {
+        metadata: { labels: l },
+        spec: {
+          containers: [
+            {
+              name: 'postgres',
+              image: PG_IMAGE,
+              ports: [{ containerPort: 5432 }],
+              env: [
+                { name: 'POSTGRES_USER', valueFrom: { secretKeyRef: { name: secretName, key: 'username' } } },
+                { name: 'POSTGRES_PASSWORD', valueFrom: { secretKeyRef: { name: secretName, key: 'password' } } },
+                { name: 'POSTGRES_DB', value: 'postgres' },
+                { name: 'PGDATA', value: '/var/lib/postgresql/data/pgdata' },
+              ],
+              volumeMounts: [{ name: 'data', mountPath: '/var/lib/postgresql/data' }],
+              readinessProbe: {
+                exec: { command: ['sh', '-c', 'pg_isready -U "$POSTGRES_USER"'] },
+                initialDelaySeconds: 5,
+                periodSeconds: 5,
+              },
+            },
+          ],
+        },
+      },
+      volumeClaimTemplates: [
+        {
+          metadata: { name: 'data' },
+          spec: {
+            accessModes: ['ReadWriteOnce'],
+            ...(STORAGE_CLASS ? { storageClassName: STORAGE_CLASS } : {}),
+            resources: { requests: { storage: PG_STORAGE } },
+          },
+        },
+      ],
+    },
+  }
+}
+
+function service(id) {
+  const name = `postgres-${id}`
+  return {
+    apiVersion: 'v1',
+    kind: 'Service',
+    metadata: { name, labels: labels(id) },
+    spec: {
+      selector: { app: name },
+      ports: [{ port: 5432, targetPort: 5432 }],
+      clusterIP: 'None', // headless: stable DNS postgres-<id>
+    },
+  }
+}
+
+// Allow ingress to the tenant DB only from TravelManager pods.
+function networkPolicy(id) {
+  const name = `postgres-${id}`
+  return {
+    apiVersion: 'networking.k8s.io/v1',
+    kind: 'NetworkPolicy',
+    metadata: { name, labels: labels(id) },
+    spec: {
+      podSelector: { matchLabels: { app: name } },
+      policyTypes: ['Ingress'],
+      ingress: [
+        {
+          from: [{ podSelector: { matchLabels: { 'app.kubernetes.io/part-of': 'travelmanager' } } }],
+          ports: [{ protocol: 'TCP', port: 5432 }],
+        },
+      ],
+    },
+  }
+}
+
+// Create the StatefulSet + Service (+ NetworkPolicy) for a tenant. The DB
+// credential Secret is expected to already exist (shared cluster credential
+// mounted in all services); its name comes from TENANT_DB_SECRET.
+export async function createTenantPostgres(id) {
+  if (!k8sEnabled()) return { skipped: 'k8s disabled' }
+  const { apps, core, net } = clients()
+  const secretName = process.env.TENANT_DB_SECRET || 'tenant-db-credential'
+
+  await ignoreConflict(core.createNamespacedService(SCHEMA_NS, service(id)))
+  await ignoreConflict(net.createNamespacedNetworkPolicy(SCHEMA_NS, networkPolicy(id)))
+  await ignoreConflict(apps.createNamespacedStatefulSet(SCHEMA_NS, statefulSet(id, secretName)))
+  return { created: `postgres-${id}` }
+}
+
+// Poll until the StatefulSet reports a ready replica (or timeout). Mirrors the
+// schema-bootstrap backoff philosophy: tolerate cold-start latency.
+export async function waitForTenantPostgres(id, { timeoutMs = 180000, intervalMs = 4000 } = {}) {
+  if (!k8sEnabled()) return true
+  const { apps } = clients()
+  const name = `postgres-${id}`
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const res = await apps.readNamespacedStatefulSetStatus(name, SCHEMA_NS)
+      const ready = res?.body?.status?.readyReplicas || 0
+      if (ready >= 1) return true
+    } catch (e) {
+      console.error(`[provisioner] waitForReady ${name}:`, e?.message || e)
+    }
+    await new Promise((r) => setTimeout(r, intervalMs))
+  }
+  throw new Error(`tenant postgres ${name} not ready within ${timeoutMs}ms`)
+}
+
+// ─── Per-tenant application pods ─────────────────────────────────────────────
+// A standard tenant gets its OWN Deployment + Service + HPA for every backend
+// service (compute isolation), named <svc>-<id>, on the same cluster. Each
+// scales 1→2. The gateway routes that tenant's traffic to these pods; the pods
+// form a closed mesh (their *_SERVICE_URL point at each other), and pick the
+// tenant's Postgres pod per request via the x-tenant-id header (tenant-db.js).
+const APP_SERVICES = [
+  'user-service',
+  'trip-service',
+  'destination-service',
+  'social-service',
+  'travel-info-service',
+  'notification-service',
+]
+const APP_IMAGE_REGISTRY = process.env.TENANT_APP_IMAGE_REGISTRY || ''
+const APP_IMAGE_TAG = process.env.TENANT_APP_IMAGE_TAG || 'latest'
+const APP_HPA_MIN = Number(process.env.TENANT_APP_HPA_MIN || 1)
+const APP_HPA_MAX = Number(process.env.TENANT_APP_HPA_MAX || 2)
+const APP_PULL_POLICY = process.env.TENANT_APP_IMAGE_PULL_POLICY || 'Always'
+
+// Plain common-env keys carried by the provisioner (from tm.commonEnv) that every
+// per-tenant app pod also needs. Service-to-service URLs are deliberately excluded
+// — they're rewritten per tenant below. DB creds + API keys arrive via envFrom the
+// per-service Secret, so they're not listed here.
+const COPIED_ENV = [
+  'NODE_ENV', 'GOOGLE_CLOUD_PROJECT', 'VERTEX_LOCATION', 'FROM_EMAIL', 'APP_BASE_URL',
+  'ROOT_DOMAIN', 'ADMIN_EMAILS', 'PROVISIONER_K8S_ENABLED', 'PROVISIONER_NAMESPACE',
+  'TENANT_DB_SECRET', 'TENANT_DB_HOST_SUFFIX', 'TENANT_DB_PORT', 'TENANT_DB_USER',
+  'TENANT_DB_PASSWORD', 'TENANT_DEDICATED_PODS', 'TENANT_APP_IMAGE_REGISTRY',
+  'TENANT_APP_IMAGE_TAG', 'TENANT_APP_HPA_MIN', 'TENANT_APP_HPA_MAX',
+]
+
+function appEnv(id) {
+  const env = [
+    { name: 'NITRO_HOST', value: '0.0.0.0' },
+    { name: 'NITRO_PORT', value: '8080' },
+  ]
+  for (const k of COPIED_ENV) {
+    if (process.env[k] != null) env.push({ name: k, value: String(process.env[k]) })
+  }
+  // Tenant-suffixed mesh: a tenant's pods only ever call each other.
+  env.push(
+    { name: 'USER_SERVICE_URL', value: `http://user-service-${id}:8080` },
+    { name: 'TRIP_SERVICE_URL', value: `http://trip-service-${id}:8080` },
+    { name: 'DESTINATION_SERVICE_URL', value: `http://destination-service-${id}:8080` },
+    { name: 'SOCIAL_SERVICE_URL', value: `http://social-service-${id}:8080` },
+    { name: 'TRAVEL_INFO_SERVICE_URL', value: `http://travel-info-service-${id}:8080` },
+    // Provisioning stays a shared control-plane concern.
+    { name: 'PROVISIONER_SERVICE_URL', value: 'http://provisioner-service:8080' },
+  )
+  return env
+}
+
+function appLabels(id, svc) {
+  const name = `${svc}-${id}`
+  return { ...labels(id), app: name, 'travelmanager.service': svc }
+}
+
+function appDeployment(id, svc) {
+  const name = `${svc}-${id}`
+  const l = appLabels(id, svc)
+  return {
+    apiVersion: 'apps/v1',
+    kind: 'Deployment',
+    metadata: { name, labels: l },
+    spec: {
+      // No replicas — the HPA owns .spec.replicas (mirrors the shared Deployments).
+      selector: { matchLabels: { app: name } },
+      template: {
+        metadata: { labels: l },
+        spec: {
+          serviceAccountName: 'travelmanager',
+          containers: [
+            {
+              name: svc,
+              image: `${APP_IMAGE_REGISTRY}/${svc}:${APP_IMAGE_TAG}`,
+              imagePullPolicy: APP_PULL_POLICY,
+              ports: [{ containerPort: 8080 }],
+              env: appEnv(id),
+              envFrom: [{ secretRef: { name: `${svc}-secrets`, optional: true } }],
+              readinessProbe: {
+                httpGet: { path: '/api/ready', port: 8080 },
+                initialDelaySeconds: 5,
+                periodSeconds: 10,
+              },
+              livenessProbe: {
+                httpGet: { path: '/api/health', port: 8080 },
+                initialDelaySeconds: 15,
+                periodSeconds: 20,
+                timeoutSeconds: 5,
+                failureThreshold: 3,
+              },
+              resources: {
+                requests: { cpu: '100m', memory: '192Mi' },
+                limits: { cpu: '1000m', memory: '512Mi' },
+              },
+            },
+          ],
+        },
+      },
+    },
+  }
+}
+
+function appService(id, svc) {
+  const name = `${svc}-${id}`
+  return {
+    apiVersion: 'v1',
+    kind: 'Service',
+    metadata: { name, labels: appLabels(id, svc) },
+    spec: { selector: { app: name }, ports: [{ port: 8080, targetPort: 8080 }] },
+  }
+}
+
+function appHpa(id, svc) {
+  const name = `${svc}-${id}`
+  return {
+    apiVersion: 'autoscaling/v2',
+    kind: 'HorizontalPodAutoscaler',
+    metadata: { name, labels: appLabels(id, svc) },
+    spec: {
+      scaleTargetRef: { apiVersion: 'apps/v1', kind: 'Deployment', name },
+      minReplicas: APP_HPA_MIN,
+      maxReplicas: APP_HPA_MAX,
+      metrics: [
+        { type: 'Resource', resource: { name: 'cpu', target: { type: 'Utilization', averageUtilization: 70 } } },
+      ],
+    },
+  }
+}
+
+// Create the per-tenant Deployment + Service + HPA for every backend service.
+// Idempotent (409 → success).
+export async function createTenantApps(id) {
+  if (!k8sEnabled()) return { skipped: 'k8s disabled' }
+  if (!APP_IMAGE_REGISTRY) throw new Error('TENANT_APP_IMAGE_REGISTRY not set')
+  const { apps, core, autoscaling } = clients()
+  const created = []
+  for (const svc of APP_SERVICES) {
+    await ignoreConflict(core.createNamespacedService(SCHEMA_NS, appService(id, svc)))
+    await ignoreConflict(apps.createNamespacedDeployment(SCHEMA_NS, appDeployment(id, svc)))
+    await ignoreConflict(autoscaling.createNamespacedHorizontalPodAutoscaler(SCHEMA_NS, appHpa(id, svc)))
+    created.push(`${svc}-${id}`)
+  }
+  return { created }
+}
+
+// Poll until every per-tenant app Deployment has ≥1 available replica (or timeout),
+// so the gateway never routes to a tenant pod that isn't serving yet.
+export async function waitForTenantApps(id, { timeoutMs = 180000, intervalMs = 4000 } = {}) {
+  if (!k8sEnabled()) return true
+  const { apps } = clients()
+  const deadline = Date.now() + timeoutMs
+  const pending = new Set(APP_SERVICES.map((s) => `${s}-${id}`))
+  while (Date.now() < deadline && pending.size) {
+    for (const name of [...pending]) {
+      try {
+        const res = await apps.readNamespacedDeploymentStatus(name, SCHEMA_NS)
+        if ((res?.body?.status?.availableReplicas || 0) >= 1) pending.delete(name)
+      } catch (e) {
+        console.error(`[provisioner] waitForApps ${name}:`, e?.message || e)
+      }
+    }
+    if (pending.size) await new Promise((r) => setTimeout(r, intervalMs))
+  }
+  if (pending.size) throw new Error(`tenant app pods not ready: ${[...pending].join(', ')}`)
+  return true
+}
+
+// Tear down a tenant's app pods (Deployment + Service + HPA per service).
+// Best-effort; ignores 404 so it's safe to re-run.
+export async function deleteTenantApps(id) {
+  if (!k8sEnabled()) return { skipped: 'k8s disabled' }
+  const { apps, core, autoscaling } = clients()
+  const deleted = []
+  for (const svc of APP_SERVICES) {
+    const name = `${svc}-${id}`
+    await ignoreMissing(autoscaling.deleteNamespacedHorizontalPodAutoscaler(name, SCHEMA_NS))
+    await ignoreMissing(apps.deleteNamespacedDeployment(name, SCHEMA_NS))
+    await ignoreMissing(core.deleteNamespacedService(name, SCHEMA_NS))
+    deleted.push(name)
+  }
+  return { deleted }
+}
+
+// Delete a tenant's Postgres (offboarding): StatefulSet, Service, NetworkPolicy
+// AND the PVC (StatefulSets do NOT garbage-collect their PVCs, so the data volume
+// would otherwise linger and cost storage / clash on re-create). Best-effort;
+// ignores 404 so it's safe to re-run.
+export async function deleteTenantPostgres(id) {
+  if (!k8sEnabled()) return { skipped: 'k8s disabled' }
+  const { apps, core, net } = clients()
+  const name = `postgres-${id}`
+  // StatefulSet volumeClaimTemplate 'data' + the single replica -0 → this PVC name.
+  const pvc = `data-${name}-0`
+  const ignore404 = async (p) => { try { await p } catch (e) { const c = e?.statusCode || e?.body?.code; if (c !== 404) throw e } }
+  await ignore404(apps.deleteNamespacedStatefulSet(name, SCHEMA_NS))
+  await ignore404(net.deleteNamespacedNetworkPolicy(name, SCHEMA_NS))
+  await ignore404(core.deleteNamespacedService(name, SCHEMA_NS))
+  await ignore404(core.deleteNamespacedPersistentVolumeClaim(pvc, SCHEMA_NS))
+  return { deleted: name, pvc }
+}

@@ -1,12 +1,12 @@
 // GET /api/internal/destination-stats?city=&country=
 // Internal endpoint for the Destination service's B2B aggregation. Returns only
 // aggregated, anonymized counts grouped by origin — never per-user rows.
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 export default defineEventHandler(async (event) => {
   const { city, country } = getQuery(event)
   const term = `%${String(city || country || '').trim()}%`
-  const db = getDb()
+  const db = tenantDb(event)
 
   const { rows: [counts] } = await db.query(
     `SELECT

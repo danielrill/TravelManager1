@@ -1,11 +1,11 @@
 // GET /api/reviews/trip/:tripId — stars + denormalised reviewer_name from
 // Postgres; comment text from Firestore.
 import { getFirestoreDb } from '@travelmanager/shared/firebase'
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 export default defineEventHandler(async (event) => {
   const tripId = Number(getRouterParam(event, 'tripId'))
-  const db = getDb()
+  const db = tenantDb(event)
 
   const { rows } = await db.query(`
     SELECT id, trip_id, reviewer_id, reviewer_name, stars, created_at

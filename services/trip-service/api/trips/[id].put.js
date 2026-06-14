@@ -1,5 +1,5 @@
 // PUT /api/trips/:id — owner-only update. Publishes TripUpdated.
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 import { invalidatePattern } from '@travelmanager/shared/cache'
 import { publishEvent } from '@travelmanager/shared/pubsub'
 import { geocodeCity } from '@travelmanager/shared/geocode'
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
   const lng = Number.isFinite(dest_lng) ? dest_lng : (geo?.lng ?? null)
   const destCountry = geo?.country ?? null
 
-  const db = getDb()
+  const db = tenantDb(event)
   const { rows } = await db.query(
     `UPDATE trips
      SET title=$1, destination=$2, origin=$3, start_date=$4,
@@ -50,15 +50,17 @@ export default defineEventHandler(async (event) => {
   const trip = rows[0]
   // Re-embed: title/destination/description changes shift semantics. Best-effort.
   await updateTripEmbedding(db, trip).catch(() => {})
-  invalidatePattern('trips:all')   // bust all paged public-feed caches (fire-and-forget)
+  invalidatePattern(`trips:all:${user.tenantId || 'default'}`)   // bust this tenant's paged feed caches
+  const tenantId = event.context.user?.tenantId || 'default'
   await publishEvent('TripUpdated', {
     tripId: trip.id,
+    tenantId,
     userUid: trip.user_uid,
     authorName: trip.author_name,
     title: trip.title,
     destination: trip.destination,
     startDate: trip.start_date,
-  }, { tripId: String(trip.id) }).catch((e) => console.error('[trip-service] publish TripUpdated failed', e))
+  }, { tripId: String(trip.id), tenantId }).catch((e) => console.error('[trip-service] publish TripUpdated failed', e))
 
   return trip
 })

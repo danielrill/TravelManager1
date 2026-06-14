@@ -2,13 +2,13 @@
 // Custom plans are self-contained. Template plans store only the
 // destination/route/option IDs — those live in the Destination service's DB, so
 // we hydrate them over HTTP (DB-per-service: no cross-service SQL join).
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 export default defineEventHandler(async (event) => {
   const tripId = Number(getRouterParam(event, 'tripId'))
   if (!tripId) throw createError({ statusCode: 400, statusMessage: 'Invalid trip ID' })
 
-  const db = getDb()
+  const db = tenantDb(event)
   const { rows } = await db.query('SELECT * FROM travel_plans WHERE trip_id = $1', [tripId])
   if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'No travel plan found' })
 

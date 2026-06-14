@@ -1,6 +1,6 @@
 // POST /api/likes/trip/:tripId — add like + optional comment (auth required).
 import { getFirestoreDb } from '@travelmanager/shared/firebase'
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 import { FieldValue } from 'firebase-admin/firestore'
 
 export default defineEventHandler(async (event) => {
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
 
   // Bump the denormalised tally only on a genuinely new like.
   if (!existing.exists) {
-    await getDb().query(
+    await tenantDb(event).query(
       'UPDATE trips SET like_count = like_count + 1 WHERE id = $1',
       [Number(tripId)]
     ).catch((e) => console.error('[likes.post] like_count bump failed', e?.message || e))

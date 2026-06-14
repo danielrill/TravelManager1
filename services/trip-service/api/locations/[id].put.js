@@ -1,5 +1,5 @@
 // PUT /api/locations/:id — update name/description/image/dates (owner only).
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 import { geocodeCity } from '@travelmanager/shared/geocode'
 
 export default defineEventHandler(async (event) => {
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
     lng = geo?.lng ?? null
   }
 
-  const db = getDb()
+  const db = tenantDb(event)
   const { rows } = await db.query(
     `UPDATE plan_locations
      SET name = $1, description = $2, image_url = $3, latitude = $4, longitude = $5, category = $6, date_from = $7, date_to = $8

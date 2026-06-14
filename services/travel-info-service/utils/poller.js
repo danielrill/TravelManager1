@@ -2,8 +2,25 @@
 // trips, publish TravelAlert events. Auto-imported by Nitro.
 import { createHash } from 'node:crypto'
 import { getDb } from '@travelmanager/shared/db'
+import { listTenantIds } from '@travelmanager/shared/tenant-db'
 import { publishEvent } from '@travelmanager/shared/pubsub'
 import { control } from './control.js'
+
+// Active trips live in each tenant's own pod, so fetch them per tenant and tag
+// each trip with its tenant. warnings_cache / weather_cache / alert_log stay on
+// the shared DB (cross-cutting reference + notification log).
+async function fetchActiveTripsAllTenants(tripServiceUrl) {
+  const tenantIds = await listTenantIds()
+  const all = []
+  for (const tid of tenantIds) {
+    const trips = await $fetch('/api/internal/active-trips', {
+      baseURL: tripServiceUrl,
+      headers: { 'x-tenant-id': tid },
+    }).catch((e) => { console.error('[travel-info] active-trips fetch failed for', tid, e?.message || e); return [] })
+    for (const t of trips) all.push({ ...t, tenantId: tid })
+  }
+  return all
+}
 
 function hash(s) {
   return createHash('sha1').update(String(s)).digest('hex').slice(0, 16)
@@ -91,7 +108,7 @@ export async function runDiff() {
   const cfg = cfgEnv()
   const db = getDb()
 
-  const trips = await $fetch('/api/internal/active-trips', { baseURL: cfg.tripServiceUrl }).catch((e) => { console.error('[travel-info] active-trips fetch failed', e?.message || e); return [] })
+  const trips = await fetchActiveTripsAllTenants(cfg.tripServiceUrl)
   const { rows: warnings } = await db.query(
     `SELECT country_name, severity, title, content_hash FROM warnings_cache WHERE severity <> 'none'`
   )
@@ -151,7 +168,7 @@ export async function pollWeather() {
 
   let updated = 0
   try {
-    const trips = await $fetch('/api/internal/active-trips', { baseURL: cfg.tripServiceUrl }).catch((e) => { console.error('[travel-info] active-trips fetch failed', e?.message || e); return [] })
+    const trips = await fetchActiveTripsAllTenants(cfg.tripServiceUrl)
     const cities = [...new Set(trips.map(t => String(t.destination || '').split(/[&,]/)[0].trim()).filter(Boolean))].slice(0, 50)
 
     for (const city of cities) {

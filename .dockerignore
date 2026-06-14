@@ -2,7 +2,15 @@
 .idea
 .nuxt
 .output
+# Exclude NESTED build artifacts too — root-level patterns don't match nested
+# paths, so without these each service's stale services/*/.output gets COPYed
+# into the image and shipped instead of a fresh build (caused phantom "missing
+# route" deploys).
+**/.nuxt
+**/.output
+**/.nitro
 node_modules
+**/node_modules
 npm-debug.log*
 Dockerfile
 docker-compose.yml

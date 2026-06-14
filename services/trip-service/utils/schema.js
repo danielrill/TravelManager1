@@ -8,9 +8,10 @@
 // hydrated by calling the Destination service over HTTP.
 import { getDb } from '@travelmanager/shared/db'
 
-export async function initTripDb() {
-  const db = getDb()
-
+// Accepts an optional pool so the provisioner can run this DDL against a new
+// tenant's dedicated Postgres pod; defaults to the service's shared pool at
+// startup bootstrap.
+export async function initTripDb(db = getDb()) {
   await db.query(`
     CREATE TABLE IF NOT EXISTS trips (
       id                  SERIAL      PRIMARY KEY,

@@ -12,8 +12,6 @@ declare module "nitropack/types" {
   interface NitroRuntimeConfig {
    serviceName: string,
 
-   rapidApiKey: string,
-
    destinationServiceUrl: string,
   }
 }

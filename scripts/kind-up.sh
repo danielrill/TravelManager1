@@ -7,7 +7,7 @@
 set -euo pipefail
 
 CLUSTER=travelmanager
-SERVICES=(api-gateway user-service trip-service destination-service social-service travel-info-service notification-service)
+SERVICES=(api-gateway user-service trip-service destination-service social-service travel-info-service notification-service provisioner-service)
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 

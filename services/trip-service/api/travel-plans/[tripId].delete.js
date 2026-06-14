@@ -1,12 +1,12 @@
 // DELETE /api/travel-plans/:tripId — remove the plan (owner only).
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
   const tripId = Number(getRouterParam(event, 'tripId'))
   if (!tripId) throw createError({ statusCode: 400, statusMessage: 'Invalid trip ID' })
 
-  const db = getDb()
+  const db = tenantDb(event)
   const { rowCount } = await db.query(
     `DELETE FROM travel_plans tp
      USING trips t

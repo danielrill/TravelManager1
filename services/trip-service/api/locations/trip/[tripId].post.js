@@ -1,5 +1,5 @@
 // POST /api/locations/trip/:tripId — add a location (owner only).
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 import { geocodeCity } from '@travelmanager/shared/geocode'
 
 export default defineEventHandler(async (event) => {
@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Name must be 120 characters or fewer' })
   }
 
-  const db = getDb()
+  const db = tenantDb(event)
 
   const { rows: ownerRows } = await db.query(
     'SELECT 1 FROM trips WHERE id = $1 AND user_uid = $2',

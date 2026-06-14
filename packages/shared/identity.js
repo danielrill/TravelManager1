@@ -41,6 +41,13 @@ export function identityMiddleware(event) {
   }
 
   if (user) event.context.user = user
+
+  // Tenant context is set for EVERY request — including public/unauthenticated
+  // ones (which carry no x-user-uid) — so per-tenant DB routing (tenant-db.js)
+  // works on public endpoints too. The gateway sets x-tenant-id from the Host.
+  const h = event.node?.req?.headers ?? {}
+  event.context.tenantId =
+    user?.tenantId || (h['x-tenant-id'] ? String(h['x-tenant-id']) : 'default')
 }
 
 // Guard helper for handlers that require an authenticated caller.

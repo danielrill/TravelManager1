@@ -1,6 +1,6 @@
 // DELETE /api/likes/trip/:tripId — remove like (auth required).
 import { getFirestoreDb } from '@travelmanager/shared/firebase'
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 export default defineEventHandler(async (event) => {
   const ctx = event.context.user
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
 
   // Decrement the denormalised tally only if a like actually existed.
   if (existing.exists) {
-    await getDb().query(
+    await tenantDb(event).query(
       'UPDATE trips SET like_count = GREATEST(like_count - 1, 0) WHERE id = $1',
       [Number(tripId)]
     ).catch((e) => console.error('[likes.delete] like_count drop failed', e?.message || e))

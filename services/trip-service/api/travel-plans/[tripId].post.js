@@ -1,6 +1,6 @@
 // POST /api/travel-plans/:tripId — upsert plan. Modes: "template" (IDs) or
 // "custom" (free-form text fields).
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const mode = body.mode === 'custom' ? 'custom' : 'template'
 
-  const db = getDb()
+  const db = tenantDb(event)
 
   const { rows: ownerRows } = await db.query(
     'SELECT 1 FROM trips WHERE id = $1 AND user_uid = $2',

@@ -198,6 +198,65 @@
           <a class="btn btn-gold" href="mailto:sales@onecloudaway.example?subject=Plan%20upgrade">Contact us to upgrade →</a>
         </div>
       </div>
+
+      <!-- ── Create your own workspace (self-serve, free users only) ── -->
+      <div v-if="planId === 'free'" class="workspace-card">
+        <h3 class="section-label">Create your workspace</h3>
+        <p class="workspace-sub">
+          Upgrade to a <strong>Standard</strong> workspace — your own subdomain, a
+          dedicated database and dedicated application pods. Pick a name and complete
+          the (mock) checkout.
+        </p>
+
+        <div v-if="!createdWorkspace" class="workspace-form">
+          <label for="ws-sub">Workspace subdomain</label>
+          <div class="ws-input-row">
+            <input
+              id="ws-sub"
+              v-model="workspaceSub"
+              type="text"
+              placeholder="acme"
+              maxlength="31"
+              :disabled="creating"
+              @input="wsError = ''"
+            />
+            <span class="ws-suffix">.{{ apexDomain }}</span>
+          </div>
+          <p class="ws-hint">2–31 chars, lowercase letters / numbers / hyphens, starting with a letter.</p>
+
+          <div class="ws-pay">
+            <div class="ws-pay-line"><span>Standard plan</span><span>$49 / mo</span></div>
+            <p class="ws-mock-note">🔒 Mock checkout — no card required, nothing is charged.</p>
+          </div>
+
+          <div class="form-error" v-if="wsError">{{ wsError }}</div>
+          <button
+            class="btn btn-gold ws-submit"
+            :disabled="creating || !workspaceSub"
+            @click="createWorkspace"
+          >
+            {{ creating ? 'Provisioning…' : 'Subscribe to Standard — confirm payment' }}
+          </button>
+          <p v-if="creating" class="ws-hint">Spinning up your database and pods — this can take a minute or two…</p>
+        </div>
+
+        <div v-else class="ws-success">
+          <p class="ws-success-msg">🎉 <strong>{{ createdWorkspace.tenant.name }}</strong> is live on its own pods.</p>
+
+          <div v-if="createdWorkspace.tenant.signup_code" class="ws-code-box">
+            <span class="ws-code-label">Invite access code</span>
+            <div class="ws-code-row">
+              <code class="ws-code">{{ createdWorkspace.tenant.signup_code }}</code>
+              <button type="button" class="btn btn-secondary ws-copy" @click="copyCode">
+                {{ codeCopied ? 'Copied ✓' : 'Copy' }}
+              </button>
+            </div>
+            <p class="ws-code-hint">Share this with teammates — they enter it on your workspace to join. Keep it private.</p>
+          </div>
+
+          <a class="btn btn-gold" :href="createdWorkspace.url">Open {{ createdWorkspace.url }} →</a>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -358,6 +417,47 @@ function compressAvatarToBlob(file) {
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image.')) }
     img.src = url
   })
+}
+
+// ── Self-serve workspace creation ────────────────────────────────────────────
+
+const workspaceSub    = ref('')
+const creating        = ref(false)
+const wsError         = ref('')
+const createdWorkspace = ref(null)
+
+// On the profile page the host IS the apex (free tenants live there), so the
+// current host is the suffix shown after the chosen subdomain.
+const apexDomain = computed(() => {
+  if (typeof window === 'undefined') return 'onecloudaway.de'
+  return window.location.host.replace(/^www\./, '')
+})
+
+const codeCopied = ref(false)
+
+async function createWorkspace() {
+  wsError.value = ''
+  creating.value = true
+  try {
+    createdWorkspace.value = await apiFetch('/api/tenants/self-serve', {
+      method: 'POST',
+      body: { subdomain: workspaceSub.value.trim().toLowerCase(), confirm: true },
+    })
+  } catch (err) {
+    wsError.value = err.data?.statusMessage || err.message || 'Could not create workspace.'
+  } finally {
+    creating.value = false
+  }
+}
+
+async function copyCode() {
+  const code = createdWorkspace.value?.tenant?.signup_code
+  if (!code) return
+  try {
+    await navigator.clipboard.writeText(code)
+    codeCopied.value = true
+    setTimeout(() => { codeCopied.value = false }, 2000)
+  } catch { /* clipboard blocked — user can select manually */ }
 }
 
 // ── Edit mode ────────────────────────────────────────────────────────────────
@@ -844,7 +944,112 @@ async function saveProfile() {
 }
 .plans-footer-text { color: var(--text-muted); font-size: 0.85rem; flex: 1; min-width: 200px; }
 
+/* ── Create workspace card ── */
+.workspace-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 32px 40px;
+  margin-top: 24px;
+}
+.workspace-sub {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 6px 0 22px;
+}
+.workspace-form label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--navy);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.ws-input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  max-width: 420px;
+}
+.ws-input-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 13px 16px;
+  border: 2px solid var(--sand-dark);
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: var(--sand);
+  color: var(--text);
+}
+.ws-input-row input:focus { outline: none; border-color: var(--gold); background: var(--white); }
+.ws-suffix {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border: 2px solid var(--sand-dark);
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+  background: var(--sand-dark);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+.ws-hint { color: var(--text-muted); font-size: 0.78rem; margin: 8px 0 0; }
+.ws-pay {
+  margin: 20px 0;
+  padding: 16px 18px;
+  border: 1.5px solid var(--sand-dark);
+  border-radius: 12px;
+  background: var(--sand);
+}
+.ws-pay-line {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  color: var(--navy);
+  font-size: 0.95rem;
+}
+.ws-mock-note { color: var(--text-muted); font-size: 0.78rem; margin: 8px 0 0; }
+.ws-submit { margin-top: 4px; }
+.ws-success-msg { color: var(--text); font-size: 1rem; margin-bottom: 14px; }
+.ws-code-box {
+  margin: 0 0 18px;
+  padding: 16px 18px;
+  border: 1.5px dashed var(--gold);
+  border-radius: 12px;
+  background: rgba(201,168,76,0.08);
+}
+.ws-code-label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.ws-code-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ws-code {
+  font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--navy);
+  background: var(--white);
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--sand-dark);
+}
+.ws-copy { padding: 8px 16px; font-size: 0.82rem; }
+.ws-code-hint { color: var(--text-muted); font-size: 0.78rem; margin: 10px 0 0; }
+
 @media (max-width: 600px) {
+  .workspace-card { padding: 24px 20px; }
+  .ws-input-row { max-width: none; }
   .plans-card { padding: 24px 20px; }
   .plan-grid { grid-template-columns: 1fr; }
   .plans-footer .btn { width: 100%; justify-content: center; }

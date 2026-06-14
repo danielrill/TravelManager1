@@ -14,8 +14,11 @@ export default defineEventHandler(async (event) => {
   if (!user?.uid) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
   const tripServiceUrl = process.env.TRIP_SERVICE_URL || 'http://localhost:3002'
-  const trips = await $fetch('/api/internal/active-trips', { baseURL: tripServiceUrl })
-    .catch((e) => { console.error('[travel-info] active-trips fetch failed', e?.message || e); return [] })
+  // Forward the tenant so we read the caller's own trips (their pod), not shared.
+  const trips = await $fetch('/api/internal/active-trips', {
+    baseURL: tripServiceUrl,
+    headers: { 'x-tenant-id': user.tenantId || 'default' },
+  }).catch((e) => { console.error('[travel-info] active-trips fetch failed', e?.message || e); return [] })
 
   // City -> the user's trips heading there, so the client can label each card.
   const tripsByCity = new Map()

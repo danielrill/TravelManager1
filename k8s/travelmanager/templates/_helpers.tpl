@@ -27,7 +27,7 @@ from the per-service ExternalSecret (envFrom) so they are not rendered here.
 - name: FROM_EMAIL
   value: {{ .Values.global.fromEmail | default "alerts@onecloudaway.de" | quote }}
 - name: APP_BASE_URL
-  value: {{ .Values.global.appBaseUrl | default (printf "https://%s" (.Values.ingress.host | default "onecloudaway.de")) | quote }}
+  value: {{ .Values.global.appBaseUrl | default (printf "https://%s" (.Values.global.rootDomain | default "onecloudaway.de")) | quote }}
 - name: USER_SERVICE_URL
   value: "http://user-service:8080"
 - name: TRIP_SERVICE_URL
@@ -38,6 +38,51 @@ from the per-service ExternalSecret (envFrom) so they are not rendered here.
   value: "http://social-service:8080"
 - name: TRAVEL_INFO_SERVICE_URL
   value: "http://travel-info-service:8080"
+- name: PROVISIONER_SERVICE_URL
+  value: "http://provisioner-service:8080"
+# --- Multitenancy ---
+- name: ROOT_DOMAIN
+  value: {{ .Values.global.rootDomain | default "onecloudaway.de" | quote }}
+- name: ADMIN_EMAILS
+  value: {{ .Values.global.adminEmails | default "" | quote }}
+- name: PROVISIONER_K8S_ENABLED
+  value: {{ if .Values.global.provisionerK8sEnabled }}"1"{{ else }}"0"{{ end }}
+- name: PROVISIONER_NAMESPACE
+  value: {{ .Release.Namespace | quote }}
+- name: TENANT_DB_SECRET
+  value: {{ .Values.global.tenantDbSecret | default "tenant-db-credential" | quote }}
+- name: TENANT_DB_HOST_SUFFIX
+  value: {{ .Values.global.tenantDbHostSuffix | default "" | quote }}
+- name: TENANT_DB_PORT
+  value: "5432"
+# Per-tenant dedicated application pods: the provisioner stamps these out as
+# <svc>-<tenant> Deployments. Needs the image coords + scaling bounds; the gateway
+# reads TENANT_DEDICATED_PODS to route a tenant's traffic to its own pods.
+- name: TENANT_DEDICATED_PODS
+  value: {{ if .Values.global.tenantDedicatedPods }}"1"{{ else }}"0"{{ end }}
+- name: TENANT_APP_IMAGE_REGISTRY
+  value: {{ .Values.global.imageRegistry | quote }}
+- name: TENANT_APP_IMAGE_TAG
+  value: {{ .Values.global.imageTag | quote }}
+- name: TENANT_APP_IMAGE_PULL_POLICY
+  value: {{ .Values.global.imagePullPolicy | default "Always" | quote }}
+- name: TENANT_APP_HPA_MIN
+  value: {{ .Values.global.tenantAppHpaMin | default 1 | quote }}
+- name: TENANT_APP_HPA_MAX
+  value: {{ .Values.global.tenantAppHpaMax | default 2 | quote }}
+# Shared tenant-pod DB credential (optional: absent locally → tenant-db defaults).
+- name: TENANT_DB_USER
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.global.tenantDbSecret | default "tenant-db-credential" | quote }}
+      key: username
+      optional: true
+- name: TENANT_DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.global.tenantDbSecret | default "tenant-db-credential" | quote }}
+      key: password
+      optional: true
 {{- range .Values.global.extraEnv }}
 - name: {{ .name }}
   value: {{ .value | quote }}

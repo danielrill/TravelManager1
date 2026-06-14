@@ -1,7 +1,7 @@
 // GET /api/trips/all — public. All trips + denormalised author_name.
 // Supports ?q= search on title / destination / short_description / author_name.
 // Paginated via ?limit= & ?offset= (infinite scroll); defaults to one page.
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 import { cached } from '@travelmanager/shared/cache'
 
 const PAGE = 24
@@ -15,7 +15,10 @@ function clampInt(v, fallback, min, max) {
 }
 
 export default defineEventHandler(async (event) => {
-  const db = getDb()
+  const db = tenantDb(event)
+  // Cache keys MUST be tenant-scoped — the Redis cache is shared across tenants,
+  // so an unscoped key would serve one tenant's trips to another.
+  const tid = event.context.user?.tenantId || event.context.tenantId || 'default'
   const { q, limit, offset } = getQuery(event)
   const lim = clampInt(limit, PAGE, 1, MAX_PAGE)
   const off = clampInt(offset, 0, 0, Number.MAX_SAFE_INTEGER)
@@ -37,9 +40,9 @@ export default defineEventHandler(async (event) => {
     return rows
   }
 
-  // Unfiltered public feed — high traffic, short TTL. Cache per page; all pages
-  // busted together via invalidatePattern('trips:all') on any trip write.
-  return cached(`trips:all:${lim}:${off}`, 30, async () => {
+  // Unfiltered public feed — high traffic, short TTL. Cache per tenant+page; all
+  // pages busted together via invalidatePattern(`trips:all:${tid}`) on any write.
+  return cached(`trips:all:${tid}:${lim}:${off}`, 30, async () => {
     const { rows } = await db.query(
       `${base} ORDER BY start_date DESC LIMIT $1 OFFSET $2`,
       [lim, off]

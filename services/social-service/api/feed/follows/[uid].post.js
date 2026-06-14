@@ -1,5 +1,5 @@
 // POST /api/feed/follows/:uid — follow another traveller.
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid followee' })
   }
 
-  const db = getDb()
+  const db = tenantDb(event)
   await db.query(
     `INSERT INTO follows (follower_uid, followee_uid) VALUES ($1, $2)
      ON CONFLICT DO NOTHING`,

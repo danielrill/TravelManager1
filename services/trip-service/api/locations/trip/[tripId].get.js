@@ -1,11 +1,11 @@
 // GET /api/locations/trip/:tripId — locations for a trip, ordered.
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 export default defineEventHandler(async (event) => {
   const tripId = Number(getRouterParam(event, 'tripId'))
   if (!tripId) throw createError({ statusCode: 400, statusMessage: 'Invalid trip ID' })
 
-  const db = getDb()
+  const db = tenantDb(event)
   const { rows } = await db.query(
     `SELECT id, trip_id, name, description, image_url, latitude, longitude, category, date_from, date_to, position, created_at
      FROM plan_locations

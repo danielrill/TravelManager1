@@ -1,11 +1,11 @@
 // GET /api/trips — the authenticated user's trips.
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
   if (!user?.uid) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
-  const db = getDb()
+  const db = tenantDb(event)
   const { rows } = await db.query(
     `SELECT id, title, destination, start_date, short_description
      FROM trips

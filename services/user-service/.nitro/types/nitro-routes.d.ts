@@ -3,6 +3,14 @@ import type { Serialize, Simplify } from "nitropack/types";
 declare module "nitropack/types" {
   type Awaited<T> = T extends PromiseLike<infer U> ? Awaited<U> : T
   interface InternalApi {
+    '/api/admin/tenants/:id': {
+      'delete': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/admin/tenants/[id].delete').default>>>>
+      'put': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/admin/tenants/[id].put').default>>>>
+    }
+    '/api/admin/tenants': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/admin/tenants/index.get').default>>>>
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/admin/tenants/index.post').default>>>>
+    }
     '/api/health': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/health.get').default>>>>
     }
@@ -10,11 +18,33 @@ declare module "nitropack/types" {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/tenants/[id].get').default>>>>
       'put': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/tenants/[id].put').default>>>>
     }
+    '/api/internal/tenants/by-host/:sub': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/tenants/by-host/[sub].get').default>>>>
+    }
+    '/api/internal/tenants': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/tenants/index.get').default>>>>
+    }
+    '/api/internal/users': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/users.get').default>>>>
+    }
     '/api/internal/users/:id': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/users/[id].get').default>>>>
       'patch': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/users/[id].patch').default>>>>
+    }
+    '/api/ready': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/ready.get').default>>>>
     }
     '/api/tenants/:id': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/tenants/[id].get').default>>>>
+    }
+    '/api/tenants/current': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/tenants/current.get').default>>>>
+    }
+    '/api/tenants/join': {
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/tenants/join.post').default>>>>
+    }
+    '/api/tenants/verify-code': {
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/tenants/verify-code.post').default>>>>
     }
     '/api/users/:id': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/users/[id].get').default>>>>

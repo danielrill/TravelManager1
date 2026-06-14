@@ -3,6 +3,7 @@ import { planAllows } from '@travelmanager/shared/tiers'
 
 // Ordered prefix → service-key table. First match wins.
 const ROUTES = [
+  { prefix: '/api/admin',        service: 'user' },
   { prefix: '/api/users',        service: 'user' },
   { prefix: '/api/tenants',      service: 'user' },
   { prefix: '/api/trips',        service: 'trip' },
@@ -34,12 +35,46 @@ export function serviceUrl(key) {
   }
 }
 
+// serviceKey → in-cluster Service base name (for per-tenant pod routing).
+const SERVICE_NAMES = {
+  user: 'user-service',
+  trip: 'trip-service',
+  destination: 'destination-service',
+  social: 'social-service',
+  travelInfo: 'travel-info-service',
+}
+
+// Upstream for a request, accounting for dedicated per-tenant pods. A provisioned
+// standard tenant runs its own <svc>-<tenant> Deployments, so its traffic routes
+// there instead of the shared service. Falls back to the shared URL when dedicated
+// pods are disabled (TENANT_DEDICATED_PODS!=1), the tenant is 'default', or the key
+// has no per-tenant pod (e.g. nothing maps outside SERVICE_NAMES).
+export function tenantServiceUrl(key, tenantId) {
+  if (process.env.TENANT_DEDICATED_PODS !== '1' || !tenantId || tenantId === 'default') {
+    return serviceUrl(key)
+  }
+  const name = SERVICE_NAMES[key]
+  return name ? `http://${name}-${tenantId}:8080` : serviceUrl(key)
+}
+
 // Routes reachable without a token.
 export function isPublic(path, method) {
   if (path === '/api/trips/all') return true
   if (path.startsWith('/api/destinations')) return true
+  if (path === '/api/tenants/current' && method === 'GET') return true // host tenant info for the SPA
+  if (path === '/api/tenants/verify-code' && method === 'POST') return true // pre-login access-code gate
   if (/^\/api\/tenants\/[^/]+$/.test(path) && method === 'GET') return true // white-label config
   if (/^\/api\/likes\/trip\/[^/]+$/.test(path) && method === 'GET') return true
+  return false
+}
+
+// Paths a signed-in but not-yet-member user may call on a standard tenant host so
+// they can bootstrap their profile and join via access code. Everything else
+// requires membership.
+export function isJoinBootstrap(path, method) {
+  if (path === '/api/tenants/join' && method === 'POST') return true
+  if (path === '/api/users/me' && method === 'GET') return true
+  if (path === '/api/users' && method === 'POST') return true
   return false
 }
 

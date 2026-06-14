@@ -1,0 +1,17 @@
+{
+  "name": "@travelmanager/provisioner-service",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nitro dev --port 3006",
+    "build": "nitro build",
+    "start": "node .output/server/index.mjs"
+  },
+  "dependencies": {
+    "@travelmanager/shared": "*",
+    "@kubernetes/client-node": "^0.22.1",
+    "pg": "^8.20.0",
+    "nitropack": "^2.10.0"
+  }
+}

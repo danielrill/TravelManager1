@@ -2,7 +2,7 @@
 // comment text in Firestore. reviewer_name denormalised from gateway identity.
 import { getFirestoreDb } from '@travelmanager/shared/firebase'
 import { FieldValue } from 'firebase-admin/firestore'
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
 
   if (!stars || stars < 1 || stars > 5) throw createError({ statusCode: 400, statusMessage: 'stars must be 1–5' })
 
-  const db = getDb()
+  const db = tenantDb(event)
 
   const { rows: tripRows } = await db.query('SELECT user_uid FROM trips WHERE id = $1', [tripId])
   if (!tripRows.length) throw createError({ statusCode: 404, statusMessage: 'Trip not found' })

@@ -1,12 +1,12 @@
 // DELETE /api/locations/:id — remove a location (owner only).
-import { getDb } from '@travelmanager/shared/db'
+import { tenantDb } from '@travelmanager/shared/tenant-db'
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
   const id = Number(getRouterParam(event, 'id'))
   if (!id) throw createError({ statusCode: 400, statusMessage: 'Invalid location ID' })
 
-  const db = getDb()
+  const db = tenantDb(event)
   const { rowCount } = await db.query(
     `DELETE FROM plan_locations
      WHERE id = $1

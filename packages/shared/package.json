@@ -7,6 +7,7 @@
   "exports": {
     ".": "./index.js",
     "./db": "./db.js",
+    "./tenant-db": "./tenant-db.js",
     "./cache": "./cache.js",
     "./schema-bootstrap": "./schema-bootstrap.js",
     "./firebase": "./firebase.js",

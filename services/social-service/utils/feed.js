@@ -1,5 +1,5 @@
 // Feed builder + relevance scoring. Auto-imported by Nitro.
-import { getDb } from '@travelmanager/shared/db'
+import { poolForTenant } from '@travelmanager/shared/tenant-db'
 import { control } from './control.js'
 
 // Relevance score: base 1.0 for a followed author, recency bonus decaying over
@@ -14,9 +14,12 @@ export function score(startDate) {
 
 // Fan-out a trip event to every follower of the author.
 export async function buildFeedFromTrip(payload) {
-  const db = getDb()
-  const { tripId, userUid: authorUid, authorName, title, destination, startDate } = payload
+  const { tripId, tenantId, userUid: authorUid, authorName, title, destination, startDate } = payload
   if (!tripId || !authorUid) return 0
+  // Route to the originating tenant's DB pod (default = shared free DB). The
+  // event-less subscriber relies on tenantId in the payload — missing it would
+  // fan out into the wrong tenant.
+  const db = poolForTenant(tenantId || 'default')
 
   const { rows: followers } = await db.query(
     'SELECT follower_uid FROM follows WHERE followee_uid = $1',
