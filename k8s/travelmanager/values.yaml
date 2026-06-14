@@ -103,12 +103,14 @@ ingress:
   # failed to attach it (HTTPS proxy got torn down and never rebuilt → apex
   # outage). Left empty until certmap is proven; the template still supports it.
   certMap: ""
-  # Pinned to the cert currently live on the GKE Ingress (the mcrt-* auto-name of
-  # the travelmanager-cert ManagedCertificate, apex-only). Matching what's already
-  # serving makes a Helm apply a no-op on the proxy → no cert swap, no outage.
-  # Do NOT delete the travelmanager-cert ManagedCertificate — this name derives
-  # from it. Wildcard TLS is a separate, tested follow-up.
-  preSharedCert: mcrt-e0dc6ae1-a53b-496b-a14f-a19e3a010135
+  # Pinned to onecloudaway-cert: a Google-managed, ACTIVE, auto-renewing classic
+  # SSL cert for the apex (onecloudaway.de). Stable name (unlike the ephemeral
+  # mcrt-* auto-name, which the managed-cert controller deleted during a certmap
+  # attempt). Matches what's live on the Ingress → a Helm apply is a no-op on the
+  # HTTPS proxy (no cert swap, no outage). Apex-only; tenant-subdomain wildcard TLS
+  # is a separate follow-up (certmap is NOT supported by ingress-gce on this
+  # cluster — it tore down the HTTPS proxy and never rebuilt it).
+  preSharedCert: onecloudaway-cert
   staticIpName: travelmanager-ip
   managedCertName: travelmanager-cert
 
