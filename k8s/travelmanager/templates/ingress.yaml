@@ -13,7 +13,12 @@ metadata:
     # here leaves the Ingress unclaimed: no LB, no IP, no NEG.
     kubernetes.io/ingress.class: "gce"
     kubernetes.io/ingress.global-static-ip-name: {{ .Values.ingress.staticIpName }}
-    {{- if .Values.ingress.preSharedCert }}
+    {{- if .Values.ingress.certMap }}
+    # Certificate Manager cert map → Google-managed WILDCARD cert (auto-renewing,
+    # covers *.onecloudaway.de + apex). SNI-routed by the map's host entries, so a
+    # new tenant subdomain needs no cert change.
+    networking.gke.io/certmap: {{ .Values.ingress.certMap }}
+    {{- else if .Values.ingress.preSharedCert }}
     # Reuse an existing (already-validated) Google-managed SSL cert by name —
     # HTTPS is live immediately, no ManagedCertificate provisioning wait.
     ingress.gcp.kubernetes.io/pre-shared-cert: {{ .Values.ingress.preSharedCert }}
