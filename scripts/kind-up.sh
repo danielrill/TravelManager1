@@ -11,6 +11,11 @@ SERVICES=(api-gateway user-service trip-service destination-service social-servi
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# The Helm chart moved to the sibling IaC repo (TravelManagerIaC). Override
+# TM_CHART_DIR if it's checked out somewhere other than ../TravelManagerIaC.
+CHART_DIR="${TM_CHART_DIR:-$REPO_ROOT/../TravelManagerIaC/charts/travelmanager}"
+[ -d "$CHART_DIR" ] || { echo "chart not found at $CHART_DIR — set TM_CHART_DIR to the TravelManagerIaC checkout"; exit 1; }
+
 echo "==> Create kind cluster (with host ports 80/443 mapped for ingress)"
 if ! kind get clusters | grep -qx "$CLUSTER"; then
   cat <<'EOF' | kind create cluster --name travelmanager --config -
@@ -50,13 +55,13 @@ done
 echo "==> Helm install"
 # Layer the gitignored secret values (Firebase keys, RapidAPI key, etc.) on top
 # when present so the frontend gets NUXT_PUBLIC_FIREBASE_* and auth works.
-HELM_VALUES=(-f k8s/travelmanager/values-local.yaml)
-if [ -f k8s/travelmanager/values-local.secret.yaml ]; then
-  HELM_VALUES+=(-f k8s/travelmanager/values-local.secret.yaml)
+HELM_VALUES=(-f "$CHART_DIR/values-local.yaml")
+if [ -f "$CHART_DIR/values-local.secret.yaml" ]; then
+  HELM_VALUES+=(-f "$CHART_DIR/values-local.secret.yaml")
 else
   echo "   (no values-local.secret.yaml — run ./scripts/gen-local-secret.sh for Firebase/API keys)"
 fi
-helm upgrade --install travelmanager k8s/travelmanager "${HELM_VALUES[@]}" --wait --timeout 5m
+helm upgrade --install travelmanager "$CHART_DIR" "${HELM_VALUES[@]}" --wait --timeout 5m
 
 # Schema bootstrap is fire-and-forget at service startup with no retry, so on a
 # fresh cluster the DB-backed services race ahead of Postgres and fail with

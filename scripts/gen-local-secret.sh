@@ -5,11 +5,13 @@
 # and GOOGLE_MAPS_SERVER_KEY → trip-service Secret.
 #
 #   ./scripts/gen-local-secret.sh
-#   helm upgrade travelmanager k8s/travelmanager \
-#     -f k8s/travelmanager/values-local.yaml \
-#     -f k8s/travelmanager/values-local.secret.yaml
+# (kind-up.sh layers the generated overlay automatically.) The chart now lives in
+# the sibling TravelManagerIaC repo; override TM_CHART_DIR if checked out elsewhere.
 set -euo pipefail
-cd "$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+CHART_DIR="${TM_CHART_DIR:-$REPO_ROOT/../TravelManagerIaC/charts/travelmanager}"
+[ -d "$CHART_DIR" ] || { echo "chart not found at $CHART_DIR — set TM_CHART_DIR to the TravelManagerIaC checkout"; exit 1; }
 
 [ -f .env ] || { echo ".env not found"; exit 1; }
 set -a; . ./.env; set +a   # source .env
@@ -35,7 +37,7 @@ if [ -n "${FIREBASE_SERVICE_ACCOUNT:-}" ]; then
   GW_SECRET="    FIREBASE_SERVICE_ACCOUNT: '${esc}'"
 fi
 
-OUT=k8s/travelmanager/values-local.secret.yaml
+OUT="$CHART_DIR/values-local.secret.yaml"
 {
 cat <<EOF
 # AUTO-GENERATED from .env by scripts/gen-local-secret.sh — DO NOT COMMIT.
