@@ -4,6 +4,7 @@
 // Enterprise-only: the gateway forwards x-plan; we hard-check it here too
 // (defense in depth) and require the destinationMgr role.
 import { getDb } from '@travelmanager/shared/db'
+import { traceHeaders } from '@travelmanager/shared/trace'
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
@@ -29,7 +30,7 @@ export default defineEventHandler(async (event) => {
   const stats = await $fetch('/api/internal/destination-stats', {
     baseURL: base,
     // Scope the aggregate to the caller's tenant (their trips live in their pod).
-    headers: { 'x-tenant-id': user.tenantId || 'default' },
+    headers: { 'x-tenant-id': user.tenantId || 'default', ...traceHeaders(event) },
     query: { city: dest.city, country: dest.country },
   }).catch((e) => {
     console.error('[b2b] trip stats fetch failed', e)

@@ -12,6 +12,7 @@ import { resolveService, serviceUrl, tenantServiceUrl, isPublic, isBlocked, feat
 import { resolveTenantPlan } from '../utils/resolve.js'
 import { subdomainOf, isAdminSub, resolveTenantByHost } from '../utils/tenant-host.js'
 import { allow } from '../utils/ratelimit.js'
+import { meterApiRequest } from '../utils/usage-meter.js'
 import { proxyTo } from '../utils/proxy.js'
 
 const skipAuth = process.env.GATEWAY_SKIP_AUTH === '1'
@@ -127,6 +128,10 @@ export default defineEventHandler(async (event) => {
   // Feature gating.
   const denied = featureGate(path, plan)
   if (denied) throw createError({ statusCode: 403, statusMessage: denied })
+
+  // Meter the billable request (api_request dimension). Fire-and-forget: a Redis
+  // INCR aggregated and flushed to Pub/Sub by a cron. Free tier is unmetered.
+  if (plan !== 'free') meterApiRequest(hostTenant.id)
 
   // Proxy with trusted identity headers — to the tenant's own pods when it has them.
   return proxyTo(event, tenantServiceUrl(serviceKey, hostTenant.id) + event.path, {

@@ -8,6 +8,7 @@ import { getDb } from '@travelmanager/shared/db'
 import { invalidate } from '@travelmanager/shared/cache'
 import { upsertTenant, markProvisioned, genSignupCode } from '../../utils/tenants.js'
 import { validateSubdomain } from '../../utils/admin.js'
+import { traceHeaders } from '@travelmanager/shared/trace'
 
 export default defineEventHandler(async (event) => {
   const ctx = event.context.user
@@ -44,6 +45,7 @@ export default defineEventHandler(async (event) => {
     provision = await $fetch('/api/internal/provision-tenant', {
       method: 'POST',
       baseURL: provUrl,
+      headers: { ...traceHeaders(event) },
       body: { tenantId: id },
     })
   } catch (e) {

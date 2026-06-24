@@ -40,7 +40,7 @@ jobs:
         run: |
           for s in api-gateway user-service trip-service destination-service \
                    social-service travel-info-service notification-service \
-                   provisioner-service; do
+                   provisioner-service metering-service; do
             npm run build --workspace services/$s
           done
 
@@ -58,6 +58,7 @@ jobs:
           - travel-info-service
           - notification-service
           - provisioner-service
+          - metering-service
     steps:
       - uses: actions/checkout@v4
       - id: auth

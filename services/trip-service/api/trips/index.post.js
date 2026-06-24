@@ -4,6 +4,7 @@
 import { tenantDb } from '@travelmanager/shared/tenant-db'
 import { invalidatePattern } from '@travelmanager/shared/cache'
 import { publishEvent } from '@travelmanager/shared/pubsub'
+import { recordUsage } from '@travelmanager/shared/metering'
 import { geocodeCity } from '@travelmanager/shared/geocode'
 import { updateTripEmbedding } from '../../utils/embedding.js'
 
@@ -70,6 +71,15 @@ export default defineEventHandler(async (event) => {
     destination: trip.destination,
     startDate: trip.start_date,
   }, { tripId: String(trip.id), tenantId }).catch((e) => console.error('[trip-service] publish TripCreated failed', e))
+
+  // Meter the billable trip_created unit. The trip id is a natural idempotency key
+  // so a client retry never double-bills. Best-effort: metering never breaks trip
+  // creation (free tier is skipped inside recordUsage).
+  recordUsage(tenantId, 'trip_created', 1, {
+    idempotencyKey: `trip:${trip.id}`,
+    source: 'trip-service',
+    plan: user.plan,
+  }).catch((e) => console.error('[trip-service] meter trip_created failed', e))
 
   return trip
 })

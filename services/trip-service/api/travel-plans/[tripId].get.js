@@ -3,6 +3,7 @@
 // destination/route/option IDs — those live in the Destination service's DB, so
 // we hydrate them over HTTP (DB-per-service: no cross-service SQL join).
 import { tenantDb } from '@travelmanager/shared/tenant-db'
+import { traceHeaders } from '@travelmanager/shared/trace'
 
 export default defineEventHandler(async (event) => {
   const tripId = Number(getRouterParam(event, 'tripId'))
@@ -18,6 +19,7 @@ export default defineEventHandler(async (event) => {
   const base = process.env.DESTINATION_SERVICE_URL || 'http://localhost:3003'
   const refs = await $fetch('/api/plan-refs', {
     baseURL: base,
+    headers: { ...traceHeaders(event) },
     query: {
       destination_id: plan.destination_id,
       route_id: plan.route_id,

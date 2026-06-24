@@ -5,6 +5,7 @@
 import { invalidate } from '@travelmanager/shared/cache'
 import { upsertTenant, markProvisioned, genSignupCode, PLANS } from '../../../utils/tenants.js'
 import { requireAdmin, validateSubdomain } from '../../../utils/admin.js'
+import { traceHeaders } from '@travelmanager/shared/trace'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -32,6 +33,7 @@ export default defineEventHandler(async (event) => {
     provision = await $fetch('/api/internal/provision-tenant', {
       method: 'POST',
       baseURL: provUrl,
+      headers: { ...traceHeaders(event) },
       body: { tenantId: id },
     })
   } catch (e) {

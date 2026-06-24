@@ -1,8 +1,12 @@
 // Path → service routing, public routes, and per-path feature gates.
 import { planAllows } from '@travelmanager/shared/tiers'
 
-// Ordered prefix → service-key table. First match wins.
+// Ordered prefix → service-key table. First match wins. NOTE: the metering admin
+// routes are listed BEFORE '/api/admin' so they win over the user-service catch.
 const ROUTES = [
+  { prefix: '/api/admin/rate-cards', service: 'metering' },
+  { prefix: '/api/admin/usage',      service: 'metering' },
+  { prefix: '/api/usage',        service: 'metering' },
   { prefix: '/api/admin',        service: 'user' },
   { prefix: '/api/users',        service: 'user' },
   { prefix: '/api/tenants',      service: 'user' },
@@ -31,6 +35,7 @@ export function serviceUrl(key) {
     case 'destination': return process.env.DESTINATION_SERVICE_URL || 'http://localhost:3003'
     case 'social':      return process.env.SOCIAL_SERVICE_URL      || 'http://localhost:3004'
     case 'travelInfo':  return process.env.TRAVEL_INFO_SERVICE_URL || 'http://localhost:3005'
+    case 'metering':    return process.env.METERING_SERVICE_URL    || 'http://localhost:3007'
     default:            return null
   }
 }

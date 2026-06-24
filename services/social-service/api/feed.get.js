@@ -4,6 +4,7 @@
 // immediately. Gated to Standard+ at the gateway; enforced here too.
 import { tenantDb } from '@travelmanager/shared/tenant-db'
 import { planAllows } from '@travelmanager/shared/tiers'
+import { traceHeaders } from '@travelmanager/shared/trace'
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
@@ -29,7 +30,7 @@ export default defineEventHandler(async (event) => {
     baseURL: tripServiceUrl,
     // Forward the tenant so trip-service reads the SAME tenant's pod, not the
     // shared DB. Without this header the feed would mix in free-tier trips.
-    headers: { 'x-tenant-id': user.tenantId || 'default' },
+    headers: { 'x-tenant-id': user.tenantId || 'default', ...traceHeaders(event) },
     query: {
       uids,
       ...(q && String(q).trim() ? { q: String(q).trim() } : {}),

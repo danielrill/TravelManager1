@@ -71,7 +71,14 @@ function statefulSet(id, secretName) {
       replicas: 1,
       selector: { matchLabels: { app: name } },
       template: {
-        metadata: { labels: l },
+        metadata: {
+          labels: l,
+          // Keep the tenant Postgres pod OUT of the service mesh: it's already
+          // L3/L4-isolated by the NetworkPolicy below, and a plain-TCP DB
+          // connection avoids mTLS interplay with the pg_isready readiness probe.
+          // (App→Postgres stays L4-isolated, not mTLS, in v1.)
+          annotations: { 'sidecar.istio.io/inject': 'false' },
+        },
         spec: {
           containers: [
             {
@@ -245,7 +252,18 @@ function appDeployment(id, svc) {
       // No replicas — the HPA owns .spec.replicas (mirrors the shared Deployments).
       selector: { matchLabels: { app: name } },
       template: {
-        metadata: { labels: l },
+        metadata: {
+          labels: l,
+          // Service-mesh (Cloud Service Mesh / Istio): hold the app's outbound
+          // traffic until the istio-proxy sidecar is ready, so a cold-started
+          // tenant pod doesn't emit requests that fail mTLS before the proxy is up.
+          // Inert until CSM injection is enabled on the namespace (TravelManagerIaC);
+          // sidecar injection itself is namespace-labeled, so these pods join the
+          // mesh automatically once that's on.
+          annotations: {
+            'proxy.istio.io/config': '{"holdApplicationUntilProxyStarts":true}',
+          },
+        },
         spec: {
           serviceAccountName: 'travelmanager',
           containers: [
@@ -286,7 +304,9 @@ function appService(id, svc) {
     apiVersion: 'v1',
     kind: 'Service',
     metadata: { name, labels: appLabels(id, svc) },
-    spec: { selector: { app: name }, ports: [{ port: 8080, targetPort: 8080 }] },
+    // Port named `http` (+ appProtocol) so Istio detects the L7 protocol and the
+    // mesh can do HTTP-aware routing/retries/telemetry for tenant pods.
+    spec: { selector: { app: name }, ports: [{ name: 'http', port: 8080, targetPort: 8080, appProtocol: 'http' }] },
   }
 }
 

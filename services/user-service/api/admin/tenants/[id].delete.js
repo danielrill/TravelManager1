@@ -5,6 +5,7 @@
 import { getDb } from '@travelmanager/shared/db'
 import { invalidate } from '@travelmanager/shared/cache'
 import { requireAdmin } from '../../../utils/admin.js'
+import { traceHeaders } from '@travelmanager/shared/trace'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -21,7 +22,7 @@ export default defineEventHandler(async (event) => {
   // 1. Tear down the dedicated Postgres pod + PVC + Service + NetworkPolicy.
   const provUrl = process.env.PROVISIONER_SERVICE_URL || 'http://localhost:3006'
   try {
-    await $fetch('/api/internal/deprovision-tenant', { method: 'POST', baseURL: provUrl, body: { tenantId: id } })
+    await $fetch('/api/internal/deprovision-tenant', { method: 'POST', baseURL: provUrl, headers: { ...traceHeaders(event) }, body: { tenantId: id } })
   } catch (e) {
     throw createError({ statusCode: 502, statusMessage: `Pod teardown failed: ${e?.data?.statusMessage || e?.message || e}` })
   }

@@ -2,6 +2,7 @@
 // user's upcoming trips. Read side of the pollWeather worker (weather_cache).
 // Value-add only; never raises alerts.
 import { getDb } from '@travelmanager/shared/db'
+import { traceHeaders } from '@travelmanager/shared/trace'
 
 // Mirror the poller's city derivation so lookups hit the same cache keys:
 // take the destination up to the first separator and trim.
@@ -17,7 +18,7 @@ export default defineEventHandler(async (event) => {
   // Forward the tenant so we read the caller's own trips (their pod), not shared.
   const trips = await $fetch('/api/internal/active-trips', {
     baseURL: tripServiceUrl,
-    headers: { 'x-tenant-id': user.tenantId || 'default' },
+    headers: { 'x-tenant-id': user.tenantId || 'default', ...traceHeaders(event) },
   }).catch((e) => { console.error('[travel-info] active-trips fetch failed', e?.message || e); return [] })
 
   // City -> the user's trips heading there, so the client can label each card.
