@@ -52,6 +52,7 @@
         <NuxtLink to="/feed" class="nav-dropdown-item">My Feed</NuxtLink>
         <NuxtLink to="/explore" class="nav-dropdown-item nav-dropdown-globe">🌍 Explore</NuxtLink>
         <NuxtLink v-if="isDestinationMgr" to="/b2b" class="nav-dropdown-item">Partner Insights</NuxtLink>
+        <NuxtLink to="/billing" class="nav-dropdown-item">Usage &amp; Billing</NuxtLink>
         <div class="nav-dropdown-divider"></div>
         <NuxtLink to="/trips/new" class="nav-dropdown-item nav-dropdown-new">+ New Trip</NuxtLink>
       </div>

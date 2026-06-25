@@ -139,10 +139,10 @@ const periodOptions = computed(() => {
 const period = ref(periodOptions.value[0])
 
 function centsToEur(c) {
-  return ((Number(c) || 0) / 100).toLocaleString('en', { style: 'currency', currency: 'EUR' })
+  return ((Number(c) || 0) / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
 }
 function fmt(n) {
-  return (Number(n) || 0).toLocaleString('en')
+  return (Number(n) || 0).toLocaleString('de-DE')
 }
 
 async function load() {
