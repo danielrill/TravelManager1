@@ -44,8 +44,26 @@ jobs:
             npm run build --workspace services/$s
           done
 
-  images:
+  # Compute ONE sortable tag shared by all 9 images. Flux image-automation
+  # orders tags numerically by the <unix-ts> segment (see TravelManagerIaC
+  # image-automation/image-policy.yaml: ^main-(?P<ts>[0-9]+)-[a-f0-9]+$) and
+  # writes the newest back into the HelmRelease, which rolls every service.
+  # All images MUST carry the identical tag: the chart applies one shared
+  # global.imageTag to all 9 (_helpers.tpl tm.image), and the ImageRepository
+  # tracks only api-gateway as the representative — a per-job timestamp would
+  # desync frontend from services and break image pulls.
+  prep:
     needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Compute image tag
+        id: tag
+        run: echo "tag=main-$(date +%s)-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+  images:
+    needs: [test, prep]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -72,13 +90,15 @@ jobs:
       - name: Build & push ${{ matrix.service }}
         run: |
           IMG="${REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/travelmanager/${{ matrix.service }}"
+          TAG="${{ needs.prep.outputs.tag }}"
           docker build -f Dockerfile.service --build-arg SERVICE=${{ matrix.service }} \
-            -t "$IMG:${GITHUB_SHA}" -t "$IMG:latest" .
+            -t "$IMG:${TAG}" -t "$IMG:${GITHUB_SHA}" -t "$IMG:latest" .
+          docker push "$IMG:${TAG}"
           docker push "$IMG:${GITHUB_SHA}"
           docker push "$IMG:latest"
 
   frontend:
-    needs: test
+    needs: [test, prep]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,6 +112,8 @@ jobs:
       - name: Build & push frontend
         run: |
           IMG="${REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/travelmanager/frontend"
-          docker build -t "$IMG:${GITHUB_SHA}" -t "$IMG:latest" .
+          TAG="${{ needs.prep.outputs.tag }}"
+          docker build -t "$IMG:${TAG}" -t "$IMG:${GITHUB_SHA}" -t "$IMG:latest" .
+          docker push "$IMG:${TAG}"
           docker push "$IMG:${GITHUB_SHA}"
           docker push "$IMG:latest"
