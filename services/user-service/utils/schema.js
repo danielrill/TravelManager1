@@ -31,8 +31,12 @@ export async function initUserDb(db = getDb()) {
     -- Default catch-all tenant = the FREE product at the apex (no subdomain). It
     -- lives on the shared DB and is always considered provisioned.
     INSERT INTO tenants (id, name, plan, provisioned_at)
-    VALUES ('default', 'TravelManager', 'standard', NOW())
+    VALUES ('default', 'TravelManager', 'free', NOW())
     ON CONFLICT (id) DO NOTHING;
+
+    -- The apex is always the free product. Heal any legacy row that was seeded
+    -- as a paid plan (the INSERT above no-ops once the row exists).
+    UPDATE tenants SET plan = 'free' WHERE id = 'default' AND plan <> 'free';
 
     CREATE TABLE IF NOT EXISTS users (
       firebase_uid TEXT        PRIMARY KEY,
