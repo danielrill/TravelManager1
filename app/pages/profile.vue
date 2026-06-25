@@ -240,6 +240,11 @@
           <p v-if="creating" class="ws-hint">Spinning up your database and pods — this can take a minute or two…</p>
         </div>
 
+        <div v-else-if="provisioning" class="ws-provisioning">
+          <p class="ws-success-msg">⏳ Setting up <strong>{{ createdWorkspace.tenant.name }}</strong>…</p>
+          <p class="ws-hint">Spinning up your dedicated database and pods — this can take a minute or two. You can leave this page; provisioning continues.</p>
+        </div>
+
         <div v-else class="ws-success">
           <p class="ws-success-msg">🎉 <strong>{{ createdWorkspace.tenant.name }}</strong> is live on its own pods.</p>
 
@@ -423,6 +428,7 @@ function compressAvatarToBlob(file) {
 
 const workspaceSub    = ref('')
 const creating        = ref(false)
+const provisioning    = ref(false)
 const wsError         = ref('')
 const createdWorkspace = ref(null)
 
@@ -439,15 +445,36 @@ async function createWorkspace() {
   wsError.value = ''
   creating.value = true
   try {
-    createdWorkspace.value = await apiFetch('/api/tenants/self-serve', {
+    const res = await apiFetch('/api/tenants/self-serve', {
       method: 'POST',
       body: { subdomain: workspaceSub.value.trim().toLowerCase(), confirm: true },
     })
+    createdWorkspace.value = res
+    // Provisioning runs server-side in the background; poll until the workspace
+    // goes live (dedicated pods take a minute or two to become ready).
+    if (res.status === 'provisioning') {
+      provisioning.value = true
+      await pollProvisioned(res.tenant.id)
+    }
   } catch (err) {
     wsError.value = err.data?.statusMessage || err.message || 'Could not create workspace.'
   } finally {
     creating.value = false
   }
+}
+
+async function pollProvisioned(id) {
+  const deadline = Date.now() + 6 * 60 * 1000 // pods can take a few minutes
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 4000))
+    try {
+      const s = await apiFetch(`/api/tenants/${id}/status`)
+      if (s.status === 'live') { provisioning.value = false; return }
+    } catch { /* transient (pod rolling, cache) — keep polling */ }
+  }
+  // Timed out client-side; the job may still finish. Let the user retry/refresh.
+  provisioning.value = false
+  wsError.value = 'Provisioning is taking longer than expected — your workspace may still come online. Refresh in a few minutes.'
 }
 
 async function copyCode() {
