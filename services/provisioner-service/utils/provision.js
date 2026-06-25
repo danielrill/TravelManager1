@@ -19,19 +19,25 @@ function targets() {
 
 // Admin (maintenance) connection to a tenant pod's default `postgres` database,
 // used only to CREATE DATABASE. Host follows the StatefulSet Service convention.
-function adminConnString(id) {
-  const user = process.env.TENANT_DB_USER || 'postgres'
-  const pw = process.env.TENANT_DB_PASSWORD || 'postgres'
-  const port = process.env.TENANT_DB_PORT || '5432'
+// Returns discrete pg.Client fields rather than a connection-string URL: pg 8.x
+// parses connectionString via `new URL()`, which throws a bare "Invalid URL" if
+// the (env-injected) password/user contains URL-special chars or the port is
+// non-numeric. Discrete fields skip URL parsing entirely.
+function adminConn(id) {
   const suffix = process.env.TENANT_DB_HOST_SUFFIX || ''
-  const host = process.env.PROVISIONER_DB_HOST_OVERRIDE || `postgres-${id}${suffix}`
-  return `postgresql://${user}:${pw}@${host}:${port}/postgres`
+  return {
+    host: process.env.PROVISIONER_DB_HOST_OVERRIDE || `postgres-${id}${suffix}`,
+    port: Number(process.env.TENANT_DB_PORT || 5432),
+    user: process.env.TENANT_DB_USER || 'postgres',
+    password: process.env.TENANT_DB_PASSWORD || 'postgres',
+    database: 'postgres',
+  }
 }
 
 // CREATE DATABASE for each isolated service (no IF NOT EXISTS in Postgres, so
 // guard on pg_database).
 async function ensureDatabases(id, dbNames) {
-  const client = new Client({ connectionString: adminConnString(id) })
+  const client = new Client(adminConn(id))
   await client.connect()
   try {
     for (const name of dbNames) {
