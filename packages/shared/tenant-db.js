@@ -41,16 +41,23 @@ function serviceDbName() {
   return null
 }
 
-export function tenantConnString(tid) {
-  const user = process.env.TENANT_DB_USER || process.env.PGUSER || 'postgres'
-  const pw = process.env.TENANT_DB_PASSWORD || process.env.PGPASSWORD || 'postgres'
-  const port = process.env.TENANT_DB_PORT || '5432'
-  const suffix = process.env.TENANT_DB_HOST_SUFFIX || '' // e.g. '.travelmanager.svc.cluster.local'
+// Discrete pg config (not a connection-string URL): pg 8.x parses a
+// `connectionString` via `new URL()`, which throws a bare "Invalid URL" when the
+// env-injected credentials contain URL-special chars or the port is non-numeric.
+// Passing host/port/user/password/database directly skips URL parsing entirely.
+export function tenantConn(tid) {
   const dbName = serviceDbName()
   if (!dbName) {
     throw new Error('cannot resolve tenant DB name (set SERVICE_DB_NAME or DATABASE_URL)')
   }
-  return `postgresql://${user}:${pw}@postgres-${tid}${suffix}:${port}/${dbName}`
+  const suffix = process.env.TENANT_DB_HOST_SUFFIX || '' // e.g. '.travelmanager.svc.cluster.local'
+  return {
+    host: `postgres-${tid}${suffix}`,
+    port: Number(process.env.TENANT_DB_PORT || 5432),
+    user: process.env.TENANT_DB_USER || process.env.PGUSER || 'postgres',
+    password: process.env.TENANT_DB_PASSWORD || process.env.PGPASSWORD || 'postgres',
+    database: dbName,
+  }
 }
 
 // Return the pg.Pool for a tenant id. 'default' (free tier) → shared pool.
@@ -59,7 +66,7 @@ export function poolForTenant(tid) {
   if (!ID_RE.test(tid)) throw new Error(`bad tenant id: ${tid}`)
   let pool = pools.get(tid)
   if (!pool) {
-    pool = new Pool({ connectionString: tenantConnString(tid) })
+    pool = new Pool(tenantConn(tid))
     pools.set(tid, pool)
   }
   return pool
