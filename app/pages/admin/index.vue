@@ -5,7 +5,11 @@
   <div class="page-wrapper">
     <div class="page-header">
       <h2>Tenant Administration</h2>
-      <NuxtLink to="/admin/new" class="btn-primary">+ New tenant</NuxtLink>
+      <div class="header-actions">
+        <NuxtLink to="/admin/billing" class="btn-secondary">Billing</NuxtLink>
+        <NuxtLink to="/admin/rate-cards" class="btn-secondary">Rate cards</NuxtLink>
+        <NuxtLink to="/admin/new" class="btn-primary">+ New tenant</NuxtLink>
+      </div>
     </div>
 
     <div v-if="error" class="form-error">{{ error }}</div>
@@ -109,6 +113,7 @@ watch([authReady, user], ([ready, u]) => { if (ready && u) load() }, { immediate
 </script>
 
 <style scoped>
+.header-actions { display: flex; align-items: center; gap: 0.8rem; }
 .admin-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
 .admin-table th, .admin-table td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border, #e5e7eb); }
 .admin-table th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted, #6b7280); }
