@@ -184,7 +184,7 @@
               <span class="plan-col-name">{{ p.label }}</span>
               <span v-if="p.id === planId" class="plan-col-tag">Current</span>
             </div>
-            <div class="plan-col-rate">{{ p.rateLimitPerMin.toLocaleString() }} req/min</div>
+            <div class="plan-col-rate">{{ p.rateLimitPerMin.toLocaleString('de-DE') }} req/min</div>
             <ul class="plan-col-features">
               <li v-for="f in FEATURES" :key="f.key" :class="{ off: !p.features[f.key] }">
                 <span class="feat-mark">{{ p.features[f.key] ? '✓' : '✗' }}</span>{{ f.label }}
@@ -194,7 +194,7 @@
         </div>
 
         <div class="plans-footer">
-          <span class="plans-footer-text">Need more? Upgrade unlocks the feed, newsletter, white-label branding and B2B insights.</span>
+          <span class="plans-footer-text">Need more? Standard unlocks the personal feed, newsletter and white-label branding; Enterprise adds B2B partner insights and higher rate limits.</span>
           <a class="btn btn-gold" href="mailto:sales@onecloudaway.example?subject=Plan%20upgrade">Contact us to upgrade →</a>
         </div>
       </div>
