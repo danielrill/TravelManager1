@@ -1,10 +1,10 @@
-// POST /api/tenants/self-serve { subdomain, paymentSessionId } — user-initiated
-// tenant creation. Any authenticated user can upgrade themselves to a standard
-// workspace from their profile after PAYING the one-time setup charge. Mirrors the
-// admin onboarding flow (register → provision dedicated Postgres + app pods → mark
-// live) but is gated on the caller (verified payment), not the operator allowlist,
-// and the caller is made a member of the workspace they just created. Idempotent
-// retry for an un-provisioned slug.
+// POST /api/tenants/self-serve { subdomain, confirm } — user-initiated tenant
+// creation. Any authenticated user can upgrade themselves to a standard workspace
+// from their profile after a (mocked) payment confirmation step. Mirrors the admin
+// onboarding flow (register → provision dedicated Postgres + app pods → mark live)
+// but is gated on the caller, not the operator allowlist, and the caller is made a
+// member of the workspace they just created. Idempotent retry for an un-provisioned
+// slug.
 import { getDb } from '@travelmanager/shared/db'
 import { invalidate } from '@travelmanager/shared/cache'
 import { upsertTenant, markProvisioned, genSignupCode } from '../../utils/tenants.js'
@@ -20,11 +20,11 @@ export default defineEventHandler(async (event) => {
   const subdomain = validateSubdomain(b.subdomain)
   const id = subdomain // tenant id == subdomain slug
 
-  // Verify payment server-side BEFORE creating anything. Fails closed: requires a
-  // paid Stripe Checkout Session bound to this uid+subdomain (or an explicit dev
-  // mock override) — never a client-supplied boolean. See utils/payments.js.
+  // Mocked payment gate (no real processor). Verified server-side so an absent
+  // confirmation still blocks; the seam lives in utils/payments.js for a future
+  // real processor.
   try {
-    await verifyOnboardingPayment(b, { uid: ctx.uid, subdomain, plan: 'standard' })
+    await verifyOnboardingPayment(b)
   } catch (e) {
     throw createError({ statusCode: e?.statusCode || 402, statusMessage: e?.message || 'Payment required' })
   }
