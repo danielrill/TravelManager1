@@ -11,6 +11,8 @@ on:
       - 'packages/**'
       - 'app/**'
       - 'tests/**'
+      - 'nuxt.config.js'
+      - 'jsconfig.json'
       - 'Dockerfile'
       - 'Dockerfile.service'
       - 'vitest.config.js'

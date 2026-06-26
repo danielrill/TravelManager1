@@ -1,9 +1,12 @@
 export default defineNuxtRouteMiddleware(async (to) => {
   if (!import.meta.client) return
 
-  const { user, authReady } = useAuth()
+  const { user, waitAuthReady } = useAuth()
 
-  if (!authReady.value) return
+  // Decide on a KNOWN auth state. Returning early while Firebase is still
+  // restoring let a protected route render (or bounced a logged-in user to
+  // /register), racing register.vue's redirect → /trips ↔ /register flicker.
+  await waitAuthReady()
 
   const PROTECTED = ['/trips', '/profile', '/plan', '/admin']
   const isProtected = PROTECTED.some(p => to.path === p || to.path.startsWith(p + '/'))
