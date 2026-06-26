@@ -3,6 +3,14 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: false },
 
+  // Client-only SPA. Auth (Firebase), tenant resolution and all data are
+  // client-fetched, so SSR added no value and actively hurt: the server rendered
+  // the app (login page) before the client-only tenant plugin could resolve the
+  // host, producing a register→not-found flash + hydration mismatches on unknown
+  // subdomains. Rendering purely on the client lets the tenant gate decide before
+  // first paint.
+  ssr: false,
+
   // Pull the shared plan matrix (@travelmanager/shared/tiers) into the client
   // bundle. It's a workspace-symlinked package, so transpile it rather than treat
   // it as an external. Only the pure /tiers subpath is imported (no pg/firebase).
