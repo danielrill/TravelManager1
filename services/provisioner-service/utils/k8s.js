@@ -216,6 +216,27 @@ export function dedicatedServices() {
   // Only ever dedicate services we actually know how to deploy.
   return APP_SERVICES.filter((s) => set.has(s))
 }
+
+// ServiceAccount for a per-tenant app pod. Default: the single shared KSA
+// `travelmanager` (one Workload-Identity binding, current behaviour). With
+// TENANT_PER_SERVICE_SA=1 each service gets its OWN KSA (`<svc minus -service>-sa`,
+// e.g. trip-service → trip-sa) so a future Istio AuthorizationPolicy can key
+// east-west edges on the caller's mTLS identity (the KSA) instead of treating
+// every pod as the same principal. The KSAs + their WI bindings are created in
+// TravelManagerIaC FIRST — flip the flag only once they exist, else the pod
+// references a missing SA and stays Pending. Override the mapping per service
+// via TENANT_SERVICE_SA_MAP="trip-service=trip-sa,social-service=social-sa".
+export function serviceAccountFor(svc) {
+  if (process.env.TENANT_PER_SERVICE_SA !== '1') return 'travelmanager'
+  const override = Object.fromEntries(
+    (process.env.TENANT_SERVICE_SA_MAP || '')
+      .split(',')
+      .map((p) => p.split('=').map((s) => s.trim()))
+      .filter(([sv, sa]) => sv && sa)
+  )
+  return override[svc] || `${svc.replace(/-service$/, '')}-sa`
+}
+
 const APP_IMAGE_REGISTRY = process.env.TENANT_APP_IMAGE_REGISTRY || ''
 const APP_IMAGE_TAG = process.env.TENANT_APP_IMAGE_TAG || 'latest'
 const APP_HPA_MIN = Number(process.env.TENANT_APP_HPA_MIN || 1)
@@ -297,7 +318,7 @@ function appDeployment(id, svc) {
           },
         },
         spec: {
-          serviceAccountName: 'travelmanager',
+          serviceAccountName: serviceAccountFor(svc),
           containers: [
             {
               name: svc,

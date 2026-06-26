@@ -68,11 +68,26 @@ spec: { mtls: { mode: STRICT } }
 > use a healthcheck path exception. Keep STRICT everywhere east-west.
 
 ### 2c. Authorization (identity-based, layered on the existing NetworkPolicies)
-`AuthorizationPolicy` per workload, keyed on the caller's SA (all pods run as
-`travelmanager` today — split SAs per service first if you want least-privilege
-edges). Known east-west edges to allow: gateway→all app services;
-social→trip, travel-info→trip, destination→trip, *→user, user→provisioner.
-Default-deny once the allow-list is complete.
+`AuthorizationPolicy` per workload, keyed on the caller's SA. Known east-west
+edges to allow: gateway→all app services; social→trip, travel-info→trip,
+destination→trip, *→user, user→provisioner. Default-deny once the allow-list is
+complete.
+
+**Per-service KSAs (prerequisite).** mTLS identity = the caller's **KSA**
+(`cluster.local/ns/<ns>/sa/<ksa>`), not its GSA. By default every pod runs as the
+single shared KSA `travelmanager`, so an allow-list can't distinguish callers.
+The provisioner can now emit a distinct KSA per dedicated tenant pod — set
+`TENANT_PER_SERVICE_SA=1` and pods get `<svc minus -service>-sa` (trip-service →
+`trip-sa`, social-service → `social-sa`); override via
+`TENANT_SERVICE_SA_MAP="trip-service=trip-sa,…"` (`provisioner-service/utils/k8s.js`,
+`serviceAccountFor()`). Ordering matters — a pod referencing a missing KSA stays
+**Pending**:
+1. In **TravelManagerIaC**: create the per-service KSAs (incl. the shared
+   Deployments') + bind each to the existing `travelmanager-gke@…` GSA via
+   `roles/iam.workloadIdentityUser` (GCP perms unchanged — this split is about
+   mesh identity, not Cloud IAM least-privilege, which is a later step).
+2. **Then** set `TENANT_PER_SERVICE_SA=1` on the provisioner.
+3. Flag unset → stays on `travelmanager` (no behaviour change).
 
 ### 2d. Resilience
 `DestinationRule` per service host (incl. per-tenant `<svc>-<tenant>` hosts via a

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { dedicatedServices, appEnv } from '../../services/provisioner-service/utils/k8s.js'
+import { dedicatedServices, appEnv, serviceAccountFor } from '../../services/provisioner-service/utils/k8s.js'
 
 const saved = { ...process.env }
 afterEach(() => { process.env = { ...saved } })
@@ -46,5 +46,32 @@ describe('provisioner.appEnv service URLs', () => {
     const env = envMap('acme')
     expect(env.TRIP_SERVICE_URL).toBe('http://trip-service-acme:8080')
     expect(env.SOCIAL_SERVICE_URL).not.toContain('-acme')
+  })
+})
+
+describe('provisioner.serviceAccountFor', () => {
+  it('defaults to the shared travelmanager KSA when the flag is off', () => {
+    delete process.env.TENANT_PER_SERVICE_SA
+    expect(serviceAccountFor('trip-service')).toBe('travelmanager')
+    expect(serviceAccountFor('social-service')).toBe('travelmanager')
+  })
+
+  it('derives <svc>-sa per service when the flag is on', () => {
+    process.env.TENANT_PER_SERVICE_SA = '1'
+    expect(serviceAccountFor('trip-service')).toBe('trip-sa')
+    expect(serviceAccountFor('social-service')).toBe('social-sa')
+  })
+
+  it('honours the TENANT_SERVICE_SA_MAP override', () => {
+    process.env.TENANT_PER_SERVICE_SA = '1'
+    process.env.TENANT_SERVICE_SA_MAP = ' trip-service = trip-mesh-sa , social-service=social-sa '
+    expect(serviceAccountFor('trip-service')).toBe('trip-mesh-sa')
+    expect(serviceAccountFor('social-service')).toBe('social-sa')
+  })
+
+  it('override is ignored while the flag is off', () => {
+    delete process.env.TENANT_PER_SERVICE_SA
+    process.env.TENANT_SERVICE_SA_MAP = 'trip-service=trip-mesh-sa'
+    expect(serviceAccountFor('trip-service')).toBe('travelmanager')
   })
 })
