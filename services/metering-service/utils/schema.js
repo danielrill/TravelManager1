@@ -68,14 +68,40 @@ export async function initMeteringDb() {
   `)
 
   await seedDefaultRateCards(db)
+  await migrateStandardToUsageOnly(db)
+}
+
+// One-time pricing migration: Standard moved to a €29.99 one-time setup fee + 100%
+// usage-based billing, so it must carry NO recurring base_fee. Older deployments
+// seeded api_request.base_fee_cents=4900; rate_cards is append-only/versioned, so we
+// append a zero-fee version of any Standard dimension whose currently-effective card
+// still has a base fee. loadPlanCard picks the latest effective_from per dimension, so
+// the new row takes over while history stays intact. Idempotent: no-op once clean.
+async function migrateStandardToUsageOnly(db) {
+  const { rows } = await db.query(
+    `SELECT DISTINCT ON (dimension) dimension, included_qty, unit_rate_cents, base_fee_cents
+       FROM rate_cards WHERE plan = 'standard' AND effective_from <= NOW()
+      ORDER BY dimension, effective_from DESC`,
+  )
+  for (const r of rows) {
+    if (Number(r.base_fee_cents) === 0) continue
+    await db.query(
+      `INSERT INTO rate_cards (plan, dimension, included_qty, unit_rate_cents, base_fee_cents)
+       VALUES ('standard', $1, $2, $3, 0)`,
+      [r.dimension, r.included_qty, r.unit_rate_cents],
+    )
+  }
 }
 
 // Seed illustrative default rate cards for the billable tiers (operator can
 // override per-plan or per-tenant via the admin API). Idempotent: only inserts a
 // plan/dimension that has no card yet, so it never stomps operator edits.
 const DEFAULT_CARDS = {
+  // Standard is 100% usage-based: NO recurring base fee on any dimension (the €29.99
+  // is a one-time onboarding charge, see PLANS.standard.oneTimeSetupCents). Tenants
+  // pay only for what they use beyond the included allowances.
   standard: {
-    api_request:       { included_qty: 1_000_000, unit_rate_cents: 0.01,  base_fee_cents: 4900 },
+    api_request:       { included_qty: 1_000_000, unit_rate_cents: 0.01,  base_fee_cents: 0 },
     ai_recommendation: { included_qty: 5_000,     unit_rate_cents: 2,     base_fee_cents: 0 },
     active_seat:       { included_qty: 5,         unit_rate_cents: 500,   base_fee_cents: 0 },
     trip_created:      { included_qty: 10_000,    unit_rate_cents: 1,     base_fee_cents: 0 },

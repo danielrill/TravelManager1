@@ -24,6 +24,7 @@ function clients() {
     core: kc.makeApiClient(k8s.CoreV1Api),
     net: kc.makeApiClient(k8s.NetworkingV1Api),
     autoscaling: kc.makeApiClient(k8s.AutoscalingV2Api),
+    custom: kc.makeApiClient(k8s.CustomObjectsApi), // GKE svcneg CRD (NEG capacity preflight)
   }
 }
 
@@ -197,6 +198,24 @@ const APP_SERVICES = [
   'travel-info-service',
   'notification-service',
 ]
+
+// Which services get a DEDICATED per-tenant pod. MUST match the api-gateway's
+// TENANT_DEDICATED_SERVICES (same env, same default) — the gateway routes a
+// tenant's traffic to <svc>-<tenant> ONLY for these, so anything dedicated here
+// but not there (or vice-versa) makes that tenant 503. Everything else uses the
+// shared pod (tenant-correct via x-tenant-id header routing in tenant-db.js).
+// Default: the two DB-isolated services (trip, social) — they keep their own
+// compute; the other 4 are shared-DB and gain nothing from a dedicated pod.
+export function dedicatedServices() {
+  const set = new Set(
+    (process.env.TENANT_DEDICATED_SERVICES || 'trip-service,social-service')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  )
+  // Only ever dedicate services we actually know how to deploy.
+  return APP_SERVICES.filter((s) => set.has(s))
+}
 const APP_IMAGE_REGISTRY = process.env.TENANT_APP_IMAGE_REGISTRY || ''
 const APP_IMAGE_TAG = process.env.TENANT_APP_IMAGE_TAG || 'latest'
 const APP_HPA_MIN = Number(process.env.TENANT_APP_HPA_MIN || 1)
@@ -215,7 +234,16 @@ const COPIED_ENV = [
   'TENANT_APP_IMAGE_TAG', 'TENANT_APP_HPA_MIN', 'TENANT_APP_HPA_MAX',
 ]
 
-function appEnv(id) {
+// envVar → k8s service name, for the service-to-service URL block below.
+const SERVICE_URL_ENV = [
+  ['USER_SERVICE_URL', 'user-service'],
+  ['TRIP_SERVICE_URL', 'trip-service'],
+  ['DESTINATION_SERVICE_URL', 'destination-service'],
+  ['SOCIAL_SERVICE_URL', 'social-service'],
+  ['TRAVEL_INFO_SERVICE_URL', 'travel-info-service'],
+]
+
+export function appEnv(id) {
   const env = [
     { name: 'NITRO_HOST', value: '0.0.0.0' },
     { name: 'NITRO_PORT', value: '8080' },
@@ -223,16 +251,20 @@ function appEnv(id) {
   for (const k of COPIED_ENV) {
     if (process.env[k] != null) env.push({ name: k, value: String(process.env[k]) })
   }
-  // Tenant-suffixed mesh: a tenant's pods only ever call each other.
-  env.push(
-    { name: 'USER_SERVICE_URL', value: `http://user-service-${id}:8080` },
-    { name: 'TRIP_SERVICE_URL', value: `http://trip-service-${id}:8080` },
-    { name: 'DESTINATION_SERVICE_URL', value: `http://destination-service-${id}:8080` },
-    { name: 'SOCIAL_SERVICE_URL', value: `http://social-service-${id}:8080` },
-    { name: 'TRAVEL_INFO_SERVICE_URL', value: `http://travel-info-service-${id}:8080` },
-    // Provisioning stays a shared control-plane concern.
-    { name: 'PROVISIONER_SERVICE_URL', value: 'http://provisioner-service:8080' },
-  )
+  // Service-to-service URLs. A DEDICATED service is reached at its tenant-suffixed
+  // pod (<svc>-<id>); a SHARED one points at the shared Service (the provisioner's
+  // own *_SERVICE_URL env, or the in-cluster name as a fallback). This matters: if a
+  // dedicated trip pod kept the old all-suffixed mesh it would call <svc>-<id> pods
+  // that no longer exist for the shared services and 503.
+  const dedicated = new Set(dedicatedServices())
+  for (const [envKey, svc] of SERVICE_URL_ENV) {
+    const value = dedicated.has(svc)
+      ? `http://${svc}-${id}:8080`
+      : process.env[envKey] || `http://${svc}:8080`
+    env.push({ name: envKey, value })
+  }
+  // Provisioning stays a shared control-plane concern.
+  env.push({ name: 'PROVISIONER_SERVICE_URL', value: 'http://provisioner-service:8080' })
   return env
 }
 
@@ -334,7 +366,8 @@ export async function createTenantApps(id) {
   if (!APP_IMAGE_REGISTRY) throw new Error('TENANT_APP_IMAGE_REGISTRY not set')
   const { apps, core, autoscaling } = clients()
   const created = []
-  for (const svc of APP_SERVICES) {
+  // Only the DEDICATED services get a per-tenant pod; the rest run on shared pods.
+  for (const svc of dedicatedServices()) {
     await ignoreConflict(core.createNamespacedService(SCHEMA_NS, appService(id, svc)))
     await ignoreConflict(apps.createNamespacedDeployment(SCHEMA_NS, appDeployment(id, svc)))
     await ignoreConflict(autoscaling.createNamespacedHorizontalPodAutoscaler(SCHEMA_NS, appHpa(id, svc)))
@@ -349,7 +382,7 @@ export async function waitForTenantApps(id, { timeoutMs = 180000, intervalMs = 4
   if (!k8sEnabled()) return true
   const { apps } = clients()
   const deadline = Date.now() + timeoutMs
-  const pending = new Set(APP_SERVICES.map((s) => `${s}-${id}`))
+  const pending = new Set(dedicatedServices().map((s) => `${s}-${id}`))
   while (Date.now() < deadline && pending.size) {
     for (const name of [...pending]) {
       try {
@@ -363,6 +396,25 @@ export async function waitForTenantApps(id, { timeoutMs = 180000, intervalMs = 4
   }
   if (pending.size) throw new Error(`tenant app pods not ready: ${[...pending].join(', ')}`)
   return true
+}
+
+// Cluster-wide count of GKE ServiceNetworkEndpointGroup (svcneg) CRs — one per
+// NEG-backed Service. Each maps to ~NEG_ZONE_COUNT zonal NEGs against the regional
+// GCP NETWORK_ENDPOINT_GROUPS quota. Used by the provisioning capacity preflight.
+export async function countServiceNegs() {
+  if (!k8sEnabled()) return 0
+  const { custom } = clients()
+  const res = await custom.listClusterCustomObject(
+    'networking.gke.io', 'v1beta1', 'servicenetworkendpointgroups'
+  )
+  const items = res?.body?.items ?? res?.items ?? []
+  return items.length
+}
+
+// How many NEG-backed Services a new tenant adds: one per dedicated app service
+// + the (headless) Postgres Service.
+export function tenantNegCount() {
+  return dedicatedServices().length + 1
 }
 
 // Tear down a tenant's app pods (Deployment + Service + HPA per service).

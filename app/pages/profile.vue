@@ -203,9 +203,10 @@
       <div v-if="planId === 'free'" class="workspace-card">
         <h3 class="section-label">Create your workspace</h3>
         <p class="workspace-sub">
-          Upgrade to a <strong>Standard</strong> workspace — your own subdomain, a
-          dedicated database and dedicated application pods. Pick a name and complete
-          the (mock) checkout.
+          Upgrade to a <strong>Standard</strong> workspace — your own subdomain and
+          dedicated database, on dedicated trip &amp; feed services. A one-time
+          <strong>€29.99</strong> setup, then pay only for what you use — no monthly fee.
+          Pick a name and complete the (mock) checkout.
         </p>
 
         <div v-if="!createdWorkspace" class="workspace-form">
@@ -225,7 +226,8 @@
           <p class="ws-hint">2–31 chars, lowercase letters / numbers / hyphens, starting with a letter.</p>
 
           <div class="ws-pay">
-            <div class="ws-pay-line"><span>Standard plan</span><span>$49 / mo</span></div>
+            <div class="ws-pay-line"><span>Standard — one-time setup</span><span>€29.99</span></div>
+            <div class="ws-pay-line ws-pay-sub"><span>Then pay-as-you-go</span><span>usage-based · no monthly fee</span></div>
             <p class="ws-mock-note">🔒 Mock checkout — no card required, nothing is charged.</p>
           </div>
 
@@ -235,7 +237,7 @@
             :disabled="creating || !workspaceSub"
             @click="createWorkspace"
           >
-            {{ creating ? 'Provisioning…' : 'Subscribe to Standard — confirm payment' }}
+            {{ creating ? 'Provisioning…' : 'Pay €29.99 once — create workspace' }}
           </button>
           <p v-if="creating" class="ws-hint">Spinning up your database and pods — this can take a minute or two…</p>
         </div>

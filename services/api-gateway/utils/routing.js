@@ -49,17 +49,36 @@ const SERVICE_NAMES = {
   travelInfo: 'travel-info-service',
 }
 
+// Which k8s services get a DEDICATED per-tenant pod. Read at runtime (12-Factor,
+// same contract as serviceUrl) and MUST match the provisioner's set exactly — the
+// two are configured from the same TENANT_DEDICATED_SERVICES env so the gateway can
+// never route to a <svc>-<tenant> pod the provisioner didn't create. Only the
+// DB-isolated services (trip, social) need their own pods for compute isolation;
+// every other service routes to the SHARED pod, which stays tenant-correct because
+// the gateway injects x-tenant-id and the shared pod's tenant-db routing handles it.
+function dedicatedServices() {
+  return new Set(
+    (process.env.TENANT_DEDICATED_SERVICES || 'trip-service,social-service')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  )
+}
+
 // Upstream for a request, accounting for dedicated per-tenant pods. A provisioned
-// standard tenant runs its own <svc>-<tenant> Deployments, so its traffic routes
-// there instead of the shared service. Falls back to the shared URL when dedicated
-// pods are disabled (TENANT_DEDICATED_PODS!=1), the tenant is 'default', or the key
-// has no per-tenant pod (e.g. nothing maps outside SERVICE_NAMES).
+// standard tenant runs its own <svc>-<tenant> Deployments for the DEDICATED services
+// only, so that traffic routes there; everything else (and the free 'default' tenant)
+// routes to the shared service. Falls back to the shared URL when dedicated pods are
+// disabled (TENANT_DEDICATED_PODS!=1), the tenant is 'default', the key has no Service
+// name, or the service isn't in the dedicated set.
 export function tenantServiceUrl(key, tenantId) {
   if (process.env.TENANT_DEDICATED_PODS !== '1' || !tenantId || tenantId === 'default') {
     return serviceUrl(key)
   }
   const name = SERVICE_NAMES[key]
-  return name ? `http://${name}-${tenantId}:8080` : serviceUrl(key)
+  return name && dedicatedServices().has(name)
+    ? `http://${name}-${tenantId}:8080`
+    : serviceUrl(key)
 }
 
 // Routes reachable without a token.

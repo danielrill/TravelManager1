@@ -16,6 +16,11 @@ export const PLANS = {
   standard: {
     id: 'standard',
     label: 'Standard',
+    // One-time onboarding charge (€29.99, in cents). After this there is NO recurring
+    // subscription fee — ongoing billing is 100% usage-based (the metering rate card
+    // carries base_fee_cents: 0 on every dimension). The free→standard self-serve
+    // checkout collects this once.
+    oneTimeSetupCents: 2999,
     rateLimitPerMin: 600,
     features: {
       feed: true,

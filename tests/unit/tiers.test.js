@@ -18,6 +18,11 @@ describe('tiers.getPlan', () => {
     expect(getPlan('standard').rateLimitPerMin).toBe(600)
     expect(getPlan('enterprise').rateLimitPerMin).toBe(6000)
   })
+
+  it('prices Standard as a one-time €29.99 setup, then usage-based (no recurring fee)', () => {
+    expect(getPlan('standard').oneTimeSetupCents).toBe(2999)
+    expect(getPlan('free').oneTimeSetupCents).toBeUndefined()
+  })
 })
 
 describe('tiers.planAllows', () => {

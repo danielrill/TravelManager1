@@ -11,6 +11,12 @@ export default defineEventHandler(async (event) => {
     return { ok: true, ...report }
   } catch (e) {
     console.error('[provisioner] provision-tenant failed', e)
-    throw createError({ statusCode: 500, statusMessage: `Provisioning failed: ${e?.message || e}` })
+    const msg = String(e?.message || e)
+    // Capacity preflight failures are retryable (no objects created) — surface as
+    // 503 so callers can distinguish "try later" from a hard provisioning error.
+    if (msg.startsWith('capacity:')) {
+      throw createError({ statusCode: 503, statusMessage: msg })
+    }
+    throw createError({ statusCode: 500, statusMessage: `Provisioning failed: ${msg}` })
   }
 })

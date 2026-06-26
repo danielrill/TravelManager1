@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { resolveService, serviceUrl, isPublic, isBlocked, featureGate } from '../../services/api-gateway/utils/routing.js'
+import { resolveService, serviceUrl, tenantServiceUrl, isPublic, isBlocked, featureGate } from '../../services/api-gateway/utils/routing.js'
 
 describe('routing.resolveService', () => {
   it('maps path prefixes to service keys (first match wins)', () => {
@@ -40,6 +40,50 @@ describe('routing.serviceUrl', () => {
 
   it('returns null for an unknown service key', () => {
     expect(serviceUrl('bogus')).toBeNull()
+  })
+})
+
+describe('routing.tenantServiceUrl', () => {
+  const saved = { ...process.env }
+  afterEach(() => { process.env = { ...saved } })
+
+  it('routes to the shared service when dedicated pods are disabled', () => {
+    delete process.env.TENANT_DEDICATED_PODS
+    for (const k of ['TRIP_SERVICE_URL', 'SOCIAL_SERVICE_URL', 'USER_SERVICE_URL']) delete process.env[k]
+    expect(tenantServiceUrl('trip', 'acme')).toBe('http://localhost:3002')
+    expect(tenantServiceUrl('social', 'acme')).toBe('http://localhost:3004')
+  })
+
+  it("routes the free 'default' tenant to the shared service even with pods enabled", () => {
+    process.env.TENANT_DEDICATED_PODS = '1'
+    delete process.env.TRIP_SERVICE_URL
+    expect(tenantServiceUrl('trip', 'default')).toBe('http://localhost:3002')
+    expect(tenantServiceUrl('trip', '')).toBe('http://localhost:3002')
+  })
+
+  it('dedicates only trip + social by default, shares the rest', () => {
+    process.env.TENANT_DEDICATED_PODS = '1'
+    delete process.env.TENANT_DEDICATED_SERVICES
+    for (const k of ['USER_SERVICE_URL', 'DESTINATION_SERVICE_URL', 'TRAVEL_INFO_SERVICE_URL']) delete process.env[k]
+    expect(tenantServiceUrl('trip', 'acme')).toBe('http://trip-service-acme:8080')
+    expect(tenantServiceUrl('social', 'acme')).toBe('http://social-service-acme:8080')
+    expect(tenantServiceUrl('user', 'acme')).toBe('http://localhost:3001')
+    expect(tenantServiceUrl('destination', 'acme')).toBe('http://localhost:3003')
+    expect(tenantServiceUrl('travelInfo', 'acme')).toBe('http://localhost:3005')
+  })
+
+  it('honours a custom TENANT_DEDICATED_SERVICES set', () => {
+    process.env.TENANT_DEDICATED_PODS = '1'
+    process.env.TENANT_DEDICATED_SERVICES = 'trip-service'
+    delete process.env.SOCIAL_SERVICE_URL
+    expect(tenantServiceUrl('trip', 'acme')).toBe('http://trip-service-acme:8080')
+    expect(tenantServiceUrl('social', 'acme')).toBe('http://localhost:3004') // no longer dedicated
+  })
+
+  it('falls back to the shared service for keys outside SERVICE_NAMES', () => {
+    process.env.TENANT_DEDICATED_PODS = '1'
+    delete process.env.METERING_SERVICE_URL
+    expect(tenantServiceUrl('metering', 'acme')).toBe('http://localhost:3007')
   })
 })
 

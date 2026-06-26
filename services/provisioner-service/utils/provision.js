@@ -2,10 +2,31 @@
 // the per-service databases on it, then ask each isolated service to bootstrap
 // its schema in that database. Idempotent end-to-end.
 import pg from 'pg'
-import { createTenantPostgres, waitForTenantPostgres, createTenantApps, waitForTenantApps, k8sEnabled } from './k8s.js'
+import { createTenantPostgres, waitForTenantPostgres, createTenantApps, waitForTenantApps, k8sEnabled, countServiceNegs, tenantNegCount } from './k8s.js'
 
 const { Client } = pg
 const ID_RE = /^[a-z][a-z0-9-]{1,30}$/
+
+// Capacity preflight: managed ASM sources mesh endpoints from GCP NEGs, and the
+// NETWORK_ENDPOINT_GROUPS regional quota is finite (100 by default in europe-west1).
+// Exhausting it leaves a tenant's NEGs empty → the gateway gets 0 healthy upstreams
+// → every /api/* 503s, with the tenant looking "live". So refuse to provision when
+// there isn't room, leaving provisioned_at NULL (retryable) and a clear 'capacity:'
+// error instead of a silently-broken tenant. Estimate zonal usage from the cluster's
+// svcneg count × zones; gate on a tunable budget with headroom.
+async function checkNegCapacity() {
+  if (!k8sEnabled()) return
+  const zones = Number(process.env.NEG_ZONE_COUNT || 3)
+  const budget = Number(process.env.NEG_QUOTA_LIMIT || 100) - Number(process.env.NEG_HEADROOM || 10)
+  const existing = (await countServiceNegs()) * zones
+  const need = tenantNegCount() * zones
+  if (existing + need > budget) {
+    throw new Error(
+      `capacity: NETWORK_ENDPOINT_GROUPS budget exhausted ` +
+      `(~${existing} in use + ${need} needed > ${budget}); raise the europe-west1 NEG quota or remove unused tenants`
+    )
+  }
+}
 
 // Services whose data is isolated per tenant (each gets a database on the pod).
 // key → { url, db }. Reference/control-plane services (user, destination,
@@ -57,6 +78,10 @@ export async function provisionTenant(id) {
   if (!ID_RE.test(id)) throw new Error(`bad tenant id: ${id}`)
   const steps = { k8s: null, databases: null, schemas: [], apps: null }
   const tg = targets()
+
+  // 0. Capacity preflight — fail BEFORE creating any object so provisioned_at stays
+  //    NULL and the run is cleanly retryable once capacity frees up.
+  await checkNegCapacity()
 
   // 1. Pod + Service + NetworkPolicy.
   steps.k8s = await createTenantPostgres(id)
