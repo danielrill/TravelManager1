@@ -1,13 +1,15 @@
-// POST /api/tenants/self-serve { subdomain, confirm } — user-initiated tenant
-// creation. Any authenticated user can upgrade themselves to a standard workspace
-// from their profile after a (mock) payment step. Mirrors the admin onboarding
-// flow (register → provision dedicated Postgres + app pods → mark live) but is
-// gated on the caller, not the operator allowlist, and the caller is made a member
-// of the workspace they just created. Idempotent retry for an un-provisioned slug.
+// POST /api/tenants/self-serve { subdomain, paymentSessionId } — user-initiated
+// tenant creation. Any authenticated user can upgrade themselves to a standard
+// workspace from their profile after PAYING the one-time setup charge. Mirrors the
+// admin onboarding flow (register → provision dedicated Postgres + app pods → mark
+// live) but is gated on the caller (verified payment), not the operator allowlist,
+// and the caller is made a member of the workspace they just created. Idempotent
+// retry for an un-provisioned slug.
 import { getDb } from '@travelmanager/shared/db'
 import { invalidate } from '@travelmanager/shared/cache'
 import { upsertTenant, markProvisioned, genSignupCode } from '../../utils/tenants.js'
 import { validateSubdomain } from '../../utils/admin.js'
+import { verifyOnboardingPayment } from '../../utils/payments.js'
 import { traceHeaders } from '@travelmanager/shared/trace'
 
 export default defineEventHandler(async (event) => {
@@ -15,13 +17,18 @@ export default defineEventHandler(async (event) => {
   if (!ctx?.uid) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
   const b = await readBody(event)
-  // Mock payment gate: the SPA collects no real card details — it just confirms.
-  if (!b.confirm) {
-    throw createError({ statusCode: 402, statusMessage: 'Payment confirmation required' })
-  }
-
   const subdomain = validateSubdomain(b.subdomain)
   const id = subdomain // tenant id == subdomain slug
+
+  // Verify payment server-side BEFORE creating anything. Fails closed: requires a
+  // paid Stripe Checkout Session bound to this uid+subdomain (or an explicit dev
+  // mock override) — never a client-supplied boolean. See utils/payments.js.
+  try {
+    await verifyOnboardingPayment(b, { uid: ctx.uid, subdomain, plan: 'standard' })
+  } catch (e) {
+    throw createError({ statusCode: e?.statusCode || 402, statusMessage: e?.message || 'Payment required' })
+  }
+
   const db = getDb()
 
   // Refuse to hijack a workspace that already exists and is live.
@@ -46,7 +53,7 @@ export default defineEventHandler(async (event) => {
   // /api/tenants/:id/status. The row stays un-provisioned (provisioned_at NULL)
   // until the job marks it live, so a failed/lost run is safely retryable.
   const provUrl = process.env.PROVISIONER_SERVICE_URL || 'http://localhost:3006'
-  const headers = { ...traceHeaders(event) }
+  const headers = { ...traceHeaders(event), 'x-internal-token': process.env.PROVISIONER_INTERNAL_TOKEN || '' }
   const creator = { uid: ctx.uid, email: ctx.email ?? '', name: ctx.name ?? ctx.email ?? '' }
 
   const job = (async () => {
@@ -54,7 +61,7 @@ export default defineEventHandler(async (event) => {
       method: 'POST',
       baseURL: provUrl,
       headers,
-      body: { tenantId: id },
+      body: { tenantId: id, plan: 'standard' },
     })
     // Mark live + make the creator a member of their new workspace.
     await markProvisioned(id)

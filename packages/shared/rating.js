@@ -61,6 +61,15 @@ export function lineCostCents(used, line) {
 //   usageByDimension: { [dimension]: usedQty }
 //   rateCard:         resolved card { [dimension]: line }
 // Returns { totalCents, lines: [{ dimension, used, included, overage, unitRateCents, baseFeeCents, costCents }] }.
+//
+// Money handling: unit rates are sub-cent (NUMERIC(12,4) in the rate card, e.g.
+// 0.005¢/api_request) so a dimension's raw cost is fractional. We round EACH line
+// to the nearest whole cent and sum the rounded lines, so (a) the persisted
+// invoice total is an exact integer that fits `invoices.total_cents BIGINT`
+// without truncation, (b) Σ lines === totalCents (itemisation reconciles to the
+// bill), and (c) the real-time projection and the month-end invoice agree because
+// both call this same function. `rawCostCents` keeps the un-rounded value for
+// transparency/audit.
 export function computeCost(usageByDimension = {}, rateCard = {}) {
   const lines = []
   let totalCents = 0
@@ -71,7 +80,8 @@ export function computeCost(usageByDimension = {}, rateCard = {}) {
     const line = normLine(rateCard[d])
     const used = Number(usageByDimension[d] || 0)
     const overage = Math.max(0, used - line.includedQty)
-    const costCents = line.baseFeeCents + overage * line.unitRateCents
+    const rawCostCents = line.baseFeeCents + overage * line.unitRateCents
+    const costCents = Math.round(rawCostCents)
     totalCents += costCents
     lines.push({
       dimension: d,
@@ -80,6 +90,7 @@ export function computeCost(usageByDimension = {}, rateCard = {}) {
       overage,
       unitRateCents: line.unitRateCents,
       baseFeeCents: line.baseFeeCents,
+      rawCostCents,
       costCents,
     })
   }

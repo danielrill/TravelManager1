@@ -33,8 +33,8 @@ export default defineEventHandler(async (event) => {
     provision = await $fetch('/api/internal/provision-tenant', {
       method: 'POST',
       baseURL: provUrl,
-      headers: { ...traceHeaders(event) },
-      body: { tenantId: id },
+      headers: { ...traceHeaders(event), 'x-internal-token': process.env.PROVISIONER_INTERNAL_TOKEN || '' },
+      body: { tenantId: id, plan },
     })
   } catch (e) {
     // Leave the row in place (provisioned_at still NULL) so the operator can retry.
