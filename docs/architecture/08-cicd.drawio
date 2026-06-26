@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-06-26" version="21.0.0">
+  <diagram name="CI/CD" id="cicd">
+    <mxGraphModel dx="1800" dy="600" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1800" pageHeight="600" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="CI/CD Pipeline — Continuous Delivery" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="10" width="1000" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- Trigger banner -->
+        <mxCell id="trigger" value="Trigger: Push to main OR manual workflow_dispatch" style="fillColor=#dae8fc;strokeColor=#6c8ebf;whiteSpace=wrap;html=1;rounded=1;fontStyle=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="60" width="1400" height="45" as="geometry"/>
+        </mxCell>
+
+        <!-- Pipeline Steps -->
+        <mxCell id="step1" value="Developer&#xa;git push main" style="shape=mxgraph.basic.person2;fillColor=#dae8fc;strokeColor=#6c8ebf;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="200" width="100" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="step1_label" value="Developer&#xa;git push main" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="305" width="140" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="step2" value="GitHub&#xa;main Branch" style="fillColor=#f5f5f5;strokeColor=#666666;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="210" y="210" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="step3" value="GitHub Actions&#xa;.github/workflows/deploy.yml" style="fillColor=#fff2cc;strokeColor=#d6b656;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="210" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="step4" value="npm run test&#xa;(Unit Tests / Vitest)" style="fillColor=#d5e8d4;strokeColor=#82b366;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="650" y="210" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="step5" value="Docker Build&#xa;(Dockerfile.service)&#xa;Alle 9 Services + Frontend" style="fillColor=#dae8fc;strokeColor=#6c8ebf;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="870" y="210" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="step6" value="Push to&#xa;Artifact Registry&#xa;(main-&lt;ts&gt;-&lt;sha&gt;)" style="fillColor=#dae8fc;strokeColor=#6c8ebf;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="210" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="step7" value="helm upgrade --install&#xa;travelmanager" style="fillColor=#ffecb3;strokeColor=#f9a825;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1310" y="210" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="step8" value="GKE Cluster&#xa;Health-Probes /ready /health" style="fillColor=#dae8fc;strokeColor=#6c8ebf;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1530" y="210" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrows between steps -->
+        <mxCell id="e1_2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="step1" target="step2" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2_3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="step2" target="step3" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3_4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="step3" target="step4" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4_5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="step4" target="step5" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5_6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="step5" target="step6" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6_7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="step6" target="step7" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7_8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="step7" target="step8" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Sidebar notes BELOW -->
+        <mxCell id="note1" value="Workload Identity Federation&#xa;(kein Service-Account-Key)" style="fillColor=#c8e6c9;strokeColor=#34a853;whiteSpace=wrap;html=1;rounded=1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="390" y="380" width="220" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="note2" value="Vitest + Unit Tests" style="fillColor=#d5e8d4;strokeColor=#82b366;whiteSpace=wrap;html=1;rounded=1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="630" y="380" width="220" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="note3" value="k8s/travelmanager/&#xa;Helm Chart" style="fillColor=#ffecb3;strokeColor=#f9a825;whiteSpace=wrap;html=1;rounded=1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1270" y="380" width="220" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="note4" value="Rollback bei Fehler&#xa;(helm rollback)" style="fillColor=#f8cecc;strokeColor=#b85450;whiteSpace=wrap;html=1;rounded=1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="380" width="220" height="55" as="geometry"/>
+        </mxCell>
+
+        <!-- Dashed connections from notes to steps -->
+        <mxCell id="en1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;" edge="1" source="note1" target="step3" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="en2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;" edge="1" source="note2" target="step4" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="en3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;" edge="1" source="note3" target="step7" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="en4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;" edge="1" source="note4" target="step8" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

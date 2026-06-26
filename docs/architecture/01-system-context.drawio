@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-06-26" version="21.0.0">
+  <diagram name="System-Kontext" id="sys-context">
+    <mxGraphModel dx="1600" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="System-Kontext (C4 Level 1)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="20" width="700" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- Users LEFT -->
+        <mxCell id="user1" value="Reisende/r" style="shape=mxgraph.basic.person2;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="120" width="100" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="user2" value="Operator" style="shape=mxgraph.basic.person2;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="280" width="100" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="user3" value="B2B Partner" style="shape=mxgraph.basic.person2;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="440" width="100" height="100" as="geometry"/>
+        </mxCell>
+
+        <!-- TravelManager CENTRAL -->
+        <mxCell id="travelmanager" value="TravelManager" style="rounded=1;fillColor=#1ba1e2;strokeColor=#006EAF;fontColor=#ffffff;fontStyle=1;fontSize=14;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="550" y="280" width="380" height="180" as="geometry"/>
+        </mxCell>
+
+        <!-- External Systems RIGHT -->
+        <mxCell id="ext1" value="Firebase Auth" style="fillColor=#ffecb3;strokeColor=#f9a825;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="80" width="220" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="ext2" value="Google Maps API" style="fillColor=#ffecb3;strokeColor=#f9a825;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="150" width="220" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="ext3" value="Vertex AI (Embeddings)" style="fillColor=#ffecb3;strokeColor=#f9a825;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="220" width="220" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="ext4" value="RapidAPI (Flüge/Hotels)" style="fillColor=#ffecb3;strokeColor=#f9a825;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="290" width="220" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="ext5" value="SendGrid (E-Mail)" style="fillColor=#ffecb3;strokeColor=#f9a825;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="360" width="220" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="ext6" value="Auswärtiges Amt (Warnungen)" style="fillColor=#ffecb3;strokeColor=#f9a825;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="430" width="220" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="ext7" value="Open-Meteo (Wetter)" style="fillColor=#ffecb3;strokeColor=#f9a825;whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="500" width="220" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrows: Users → TravelManager -->
+        <mxCell id="e1" value="HTTPS / Browser" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="user1" target="travelmanager" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="HTTPS / Browser" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="user2" target="travelmanager" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="HTTPS / Browser" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="user3" target="travelmanager" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrows: TravelManager → External -->
+        <mxCell id="e4" value="Authentifizierung" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;" edge="1" source="travelmanager" target="ext1" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="Kartendaten / Geocoding" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;" edge="1" source="travelmanager" target="ext2" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="Vektor-Embeddings (KI)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;" edge="1" source="travelmanager" target="ext3" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="Flug- &amp; Hotelsuche" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;" edge="1" source="travelmanager" target="ext4" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="E-Mail-Versand" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;" edge="1" source="travelmanager" target="ext5" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="Reisewarnungen abrufen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;" edge="1" source="travelmanager" target="ext6" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10" value="Wetterdaten abrufen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;" edge="1" source="travelmanager" target="ext7" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
