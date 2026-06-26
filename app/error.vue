@@ -47,13 +47,19 @@ useHead({
 })
 </script>
 
-<style scoped>
+<style>
+/* NOT scoped: error.vue replaces app.vue entirely (none of app.vue's global
+   reset/:root vars load here), and a scoped rule on the root element doesn't
+   reliably apply on the Nuxt error page. Class names are unique (err-*). */
+html, body { margin: 0; padding: 0; }
 .err-page {
-  min-height: 100vh;
+  position: fixed;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
+  box-sizing: border-box;
   background: #0f1f3d; /* --navy */
 }
 .err-card {

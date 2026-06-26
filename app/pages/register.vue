@@ -129,9 +129,15 @@
 </template>
 
 <script setup>
-const { user, signInEmail, signUpEmail, signInGoogle } = useAuth()
+const { user, signInEmail, signUpEmail, signInGoogle, waitAuthReady } = useAuth()
 
-onMounted(() => { if (user.value) navigateTo('/trips') })
+// Wait for Firebase to restore the session before deciding — otherwise this fires
+// with user.value still null (or mid-restore) and races the global auth guard,
+// ping-ponging /register ↔ /trips.
+onMounted(async () => {
+  await waitAuthReady()
+  if (user.value) navigateTo('/trips')
+})
 
 const tab = ref('signin')
 const error = ref('')

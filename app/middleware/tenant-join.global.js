@@ -17,8 +17,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // Free apex (or unknown) → no gate.
   if (!tenant.value || tenant.value.id === 'default') return
 
-  const { user, authReady } = useAuth()
-  if (!authReady.value) return // auth not restored yet; gate re-evaluates on next nav
+  const { user, waitAuthReady } = useAuth()
+  await waitAuthReady() // decide on a known auth state, not a mid-restore one
 
   if (!user.value || user.value.tenant_id !== tenant.value.id) {
     return navigateTo('/join')
