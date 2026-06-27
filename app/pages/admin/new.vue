@@ -75,15 +75,16 @@ const POLL_CAP_MS = 8 * 60 * 1000
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-// Poll the (uncached) status endpoint until the tenant flips to live, or give up after
-// the cap. A failed background job leaves it 'provisioning' forever, so cap and surface
-// a non-fatal note rather than spinning indefinitely.
+// Poll the (uncached) admin status route until the tenant flips to live, or give up
+// after the cap. Must be /api/admin/* — the gateway 404s every non-/api/admin path on
+// the admin host. A failed background job leaves it 'provisioning' forever, so cap and
+// surface a non-fatal note rather than spinning indefinitely.
 async function pollUntilLive(id) {
   const deadline = Date.now() + POLL_CAP_MS
   while (Date.now() < deadline) {
     await sleep(POLL_MS)
     try {
-      const res = await apiFetch(`/api/tenants/${id}/status`)
+      const res = await apiFetch(`/api/admin/tenants/${id}`)
       if (res?.status === 'live') { provisioning.value = false; return }
     } catch { /* transient — keep polling until the cap */ }
   }

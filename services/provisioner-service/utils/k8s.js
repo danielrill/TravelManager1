@@ -419,14 +419,17 @@ export async function waitForTenantApps(id, { timeoutMs = 180000, intervalMs = 4
   return true
 }
 
-// Cluster-wide count of GKE ServiceNetworkEndpointGroup (svcneg) CRs — one per
+// Count GKE ServiceNetworkEndpointGroup (svcneg) CRs in the app namespace — one per
 // NEG-backed Service. Each maps to ~NEG_ZONE_COUNT zonal NEGs against the regional
 // GCP NETWORK_ENDPOINT_GROUPS quota. Used by the provisioning capacity preflight.
+// Scoped to SCHEMA_NS (not cluster-wide): every tenant's NEG-backed Services live in
+// this namespace, so a namespaced list is accurate AND keeps the provisioner's RBAC
+// free of any cluster-scoped grant (a cluster list 403s under the namespaced Role).
 export async function countServiceNegs() {
   if (!k8sEnabled()) return 0
   const { custom } = clients()
-  const res = await custom.listClusterCustomObject(
-    'networking.gke.io', 'v1beta1', 'servicenetworkendpointgroups'
+  const res = await custom.listNamespacedCustomObject(
+    'networking.gke.io', 'v1beta1', SCHEMA_NS, 'servicenetworkendpointgroups'
   )
   const items = res?.body?.items ?? res?.items ?? []
   return items.length
