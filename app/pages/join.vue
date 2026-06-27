@@ -1,7 +1,9 @@
 <!-- Tenant access gate. A first-time visitor enters the access code the operator
-     gave them BEFORE logging in. The code is verified, stashed, and the visitor is
-     sent to the normal /register login page; on return (now signed in) the code is
-     redeemed automatically and they enter the workspace. No second login UI. -->
+     gave them BEFORE logging in. The code is verified, remembered per-tenant in
+     localStorage, and the visitor is sent to the normal /register login page; on
+     return (now signed in) the code is redeemed automatically. On any later visit
+     from the same device the remembered code is re-validated/redeemed with no typing.
+     The stored code self-clears if it stops working (rotated by the operator). -->
 <template>
   <div class="join-wrap">
     <div class="join-card">
@@ -40,7 +42,12 @@ const code = ref('')
 const busy = ref(false)
 const error = ref('')
 
-const STASH = 'tm_join_code'
+// Per-tenant key: a device may hold codes for more than one workspace. Low-sensitivity
+// (operator-shared, reusable workspace join code), so plaintext localStorage is fine;
+// it self-clears on the first verify/join that fails (rotated code).
+const keyFor = (id) => `tm_join_code:${id}`
+const remember = () => { if (import.meta.client && tenant.value) localStorage.setItem(keyFor(tenant.value.id), code.value.trim()) }
+const forget = () => { if (import.meta.client && tenant.value) localStorage.removeItem(keyFor(tenant.value.id)) }
 
 async function init() {
   if (tenant.value === undefined) {
@@ -50,19 +57,21 @@ async function init() {
   if (!tenant.value || tenant.value.id === 'default') return navigateTo('/')
   if (user.value && user.value.tenant_id === tenant.value.id) return navigateTo('/')
 
-  // Returning from login with a stashed, already-verified code → redeem it now.
-  if (import.meta.client && user.value) {
-    const stashed = sessionStorage.getItem(STASH)
-    if (stashed) { code.value = stashed; await join() }
-  }
+  // Remembered from a previous visit on this device → no typing.
+  if (!import.meta.client) return
+  const saved = localStorage.getItem(keyFor(tenant.value.id))
+  if (!saved) return
+  code.value = saved
+  if (user.value) await join()   // signed in, not yet a member → redeem now
+  else await verify()            // not signed in → re-validate, then on to /register
 }
 
 async function verify() {
   busy.value = true; error.value = ''
   try {
     const { valid } = await apiFetch('/api/tenants/verify-code', { method: 'POST', body: { code: code.value.trim() } })
-    if (!valid) { error.value = 'That access code is not valid.'; return }
-    sessionStorage.setItem(STASH, code.value.trim())
+    if (!valid) { forget(); error.value = 'That access code is not valid.'; return }
+    remember()
     if (user.value) await join()            // already signed in → join now
     else navigateTo('/register')            // sign in on the normal page, then auto-redeem
   } catch (e) {
@@ -74,10 +83,10 @@ async function join() {
   busy.value = true; error.value = ''
   try {
     await apiFetch('/api/tenants/join', { method: 'POST', body: { code: code.value.trim() } })
-    sessionStorage.removeItem(STASH)
+    remember()                              // keep it so the next visit is typing-free
     window.location.assign('/')             // hard reload so the profile re-hydrates as a member
   } catch (e) {
-    sessionStorage.removeItem(STASH)
+    forget()                                // stale/rotated code → drop it so the user can re-enter
     error.value = e?.data?.statusMessage || e?.message || 'Could not join — check the code with your administrator.'
   } finally { busy.value = false }
 }
