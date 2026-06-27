@@ -1,7 +1,8 @@
 // POST /api/admin/tenants { subdomain, plan?, name? } — onboard a standard tenant.
-// Registers the tenant (provisioned_at NULL), asks the provisioner-service to
-// create its dedicated Postgres pod + databases + schemas, then marks it
-// provisioned. Idempotent: re-running for the same subdomain re-provisions safely.
+// Registers the tenant (provisioned_at NULL), then detaches a background job that asks
+// the provisioner-service to create its dedicated Postgres pod + databases + schemas +
+// app pods and marks it provisioned. Returns 202 immediately; the admin SPA polls
+// /api/tenants/:id/status. Idempotent: re-running for the same subdomain re-provisions safely.
 import { invalidate } from '@travelmanager/shared/cache'
 import { upsertTenant, markProvisioned, genSignupCode, PLANS } from '../../../utils/tenants.js'
 import { requireAdmin, validateSubdomain } from '../../../utils/admin.js'
@@ -19,32 +20,41 @@ export default defineEventHandler(async (event) => {
 
   // 1. Register the tenant (not yet live) with a generated access code the
   //    operator will share with the customer.
-  let tenant = await upsertTenant(id, {
+  const tenant = await upsertTenant(id, {
     name: b.name || subdomain,
     plan,
     subdomain,
     signup_code: genSignupCode(),
   })
 
-  // 2. Provision the dedicated Postgres pod + databases + schemas.
+  // 2. Provision the dedicated Postgres pod + databases + schemas + app pods in the
+  // BACKGROUND. The provisioner waits for the Postgres pod and all app pods to become
+  // ready — minutes of work, far longer than any proxy will hold an HTTP request (a
+  // synchronous wait here returns a spurious 502 to the operator even when provisioning
+  // succeeds). So we detach the job and let the admin SPA poll /api/tenants/:id/status.
+  // The row stays un-provisioned (provisioned_at NULL) until the job marks it live, so a
+  // failed/lost run is safely retryable by re-submitting the same subdomain.
   const provUrl = process.env.PROVISIONER_SERVICE_URL || 'http://localhost:3006'
-  let provision
-  try {
-    provision = await $fetch('/api/internal/provision-tenant', {
+  const headers = { ...traceHeaders(event), 'x-internal-token': process.env.PROVISIONER_INTERNAL_TOKEN || '' }
+
+  const job = (async () => {
+    await $fetch('/api/internal/provision-tenant', {
       method: 'POST',
       baseURL: provUrl,
-      headers: { ...traceHeaders(event), 'x-internal-token': process.env.PROVISIONER_INTERNAL_TOKEN || '' },
+      headers,
       body: { tenantId: id, plan },
     })
-  } catch (e) {
-    // Leave the row in place (provisioned_at still NULL) so the operator can retry.
-    throw createError({ statusCode: 502, statusMessage: `Provisioning failed: ${e?.data?.statusMessage || e?.message || e}` })
-  }
+    // Mark live + bust the gateway's host→tenant cache so the subdomain resolves.
+    await markProvisioned(id)
+    invalidate(`tenanthost:${subdomain}`)
+  })().catch((e) => {
+    // Leave the row NULL so a retry can finish onboarding; surfaced via status poll.
+    console.error(`[user-service] admin provisioning failed for ${id}:`, e?.data?.statusMessage || e?.message || e)
+  })
+  // Keep the worker alive past the response on serverless runtimes; a no-op on a
+  // long-lived node server (the detached promise runs to completion regardless).
+  event.waitUntil?.(job)
 
-  // 3. Mark live + bust the gateway's host→tenant cache so the subdomain resolves.
-  await markProvisioned(id)
-  invalidate(`tenanthost:${subdomain}`)
-  tenant = { ...tenant, provisioned_at: new Date().toISOString() }
-
-  return { ok: true, tenant, provision }
+  setResponseStatus(event, 202)
+  return { ok: true, status: 'provisioning', tenant }
 })

@@ -1,6 +1,7 @@
 <!-- Create + provision a standard tenant. POST /api/admin/tenants registers the
-     tenant and triggers the provisioner (dedicated Postgres pod + databases +
-     schemas). Provisioning can take a few seconds while the pod becomes Ready. -->
+     tenant and detaches the provisioner (dedicated Postgres pod + databases + schemas
+     + app pods), returning 202 immediately. Provisioning is minutes of work, so the
+     page polls /api/tenants/:id/status until the subdomain comes live. -->
 <template>
   <div class="page-wrapper">
     <div class="page-header">
@@ -8,9 +9,12 @@
       <NuxtLink to="/admin" class="btn-secondary">← Back</NuxtLink>
     </div>
 
-    <!-- Success: show the access code to hand to the customer. -->
+    <!-- Success: show the access code to hand to the customer. The code is valid
+         immediately; the subdomain comes live once the pods finish spinning up. -->
     <div v-if="created" class="created-card">
-      <p class="code-ok">✓ {{ created.subdomain }}.onecloudaway.de is live.</p>
+      <p v-if="provisioning" class="code-pending">⏳ Provisioning {{ created.subdomain }}.onecloudaway.de — this can take a few minutes…</p>
+      <p v-else-if="slow" class="code-pending">⏳ {{ created.subdomain }}.onecloudaway.de is still provisioning. This is taking longer than usual; the code below is valid and the subdomain will come live shortly.</p>
+      <p v-else class="code-ok">✓ {{ created.subdomain }}.onecloudaway.de is live.</p>
       <p class="muted">Share this access code with the customer — their users enter it once on the subdomain to join:</p>
       <div class="code-row">
         <code class="code-value">{{ created.signup_code }}</code>
@@ -62,7 +66,30 @@ const plan = ref('standard')
 const busy = ref(false)
 const error = ref('')
 const created = ref(null)
+const provisioning = ref(false)  // status poll still returns 'provisioning'
+const slow = ref(false)          // poll cap hit; job likely still running
 const copied = ref(false)
+
+const POLL_MS = 4000
+const POLL_CAP_MS = 8 * 60 * 1000
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// Poll the (uncached) status endpoint until the tenant flips to live, or give up after
+// the cap. A failed background job leaves it 'provisioning' forever, so cap and surface
+// a non-fatal note rather than spinning indefinitely.
+async function pollUntilLive(id) {
+  const deadline = Date.now() + POLL_CAP_MS
+  while (Date.now() < deadline) {
+    await sleep(POLL_MS)
+    try {
+      const res = await apiFetch(`/api/tenants/${id}/status`)
+      if (res?.status === 'live') { provisioning.value = false; return }
+    } catch { /* transient — keep polling until the cap */ }
+  }
+  provisioning.value = false
+  slow.value = true
+}
 
 async function submit() {
   busy.value = true
@@ -72,10 +99,12 @@ async function submit() {
       method: 'POST',
       body: { subdomain: subdomain.value.trim().toLowerCase(), name: name.value.trim(), plan: plan.value },
     })
-    created.value = res.tenant   // includes signup_code
+    created.value = res.tenant   // includes signup_code (valid immediately)
+    provisioning.value = true
+    busy.value = false
+    pollUntilLive(res.tenant.id)
   } catch (e) {
     error.value = e?.data?.statusMessage || e?.message || 'Provisioning failed'
-  } finally {
     busy.value = false
   }
 }
@@ -95,6 +124,7 @@ async function copyCode() {
 .muted { color: var(--muted, #6b7280); font-weight: 400; }
 .created-card { display: flex; flex-direction: column; gap: 0.8rem; max-width: 28rem; margin-top: 1rem; padding: 1.2rem; border: 1px solid var(--border, #e5e7eb); border-radius: 12px; }
 .code-ok { color: #16a34a; font-weight: 600; }
+.code-pending { color: #b45309; font-weight: 600; }
 .code-row { display: flex; align-items: center; gap: 0.6rem; }
 .code-value { font-size: 1.2rem; letter-spacing: 0.15em; padding: 0.4rem 0.7rem; background: #f3f4f6; border-radius: 6px; }
 </style>
