@@ -47,7 +47,7 @@
 <script setup>
 const { user, waitAuthReady } = useAuth()
 const { apiFetch } = useApiFetch()
-const router = useRouter()
+const landingPath = useLanding()
 
 const trips = ref([])
 const alerts = ref([])
@@ -90,8 +90,14 @@ onMounted(async () => {
     trips.value = await apiFetch('/api/trips')
     // Best-effort — map still renders without alert colouring.
     alerts.value = await apiFetch('/api/alerts').catch(() => [])
-  } catch {
-    router.push('/register')
+  } catch (e) {
+    const status = e?.status ?? e?.statusCode ?? e?.response?.status
+    // 401 → session gone, log in again. 403 → logged in but not a member of this
+    // standard tenant; landingPath() sends them to /join, NOT back to /register
+    // (which would bounce here again → flicker loop). Other errors: stay put, no
+    // redirect, so a transient API failure can't loop the page.
+    if (status === 401) return navigateTo('/register')
+    if (status === 403) return navigateTo(await landingPath())
   } finally {
     loading.value = false
   }

@@ -3,26 +3,12 @@
 </template>
 
 <script setup>
-// Landing redirect. On a standard tenant subdomain a non-member is sent to the
-// access-code gate (/join) FIRST — login happens once, after the code. The free
-// apex keeps the normal login → app flow.
-const { user, authReady } = useAuth()
-const tenant = useState('currentTenant', () => undefined)
+// Landing redirect. Membership-aware path comes from the shared useLanding()
+// composable (admin host → /admin; standard-tenant non-member → /join access-code
+// gate; member or free apex → /trips; logged out → /join|/register). Same logic the
+// auth pages use, so there's no hardcoded /trips to ping-pong against.
+const { authReady } = useAuth()
+const landingPath = useLanding()
 
-async function route() {
-  if (tenant.value === undefined) {
-    try { tenant.value = await useApiFetch().apiFetch('/api/tenants/current') } catch { tenant.value = null }
-  }
-  const standard = tenant.value && tenant.value.id !== 'default'
-
-  if (!user.value) {
-    return navigateTo(standard ? '/join' : '/register')
-  }
-  if (standard && user.value.tenant_id !== tenant.value.id) {
-    return navigateTo('/join')
-  }
-  return navigateTo('/trips')
-}
-
-watch(authReady, (ready) => { if (ready) route() }, { immediate: true })
+watch(authReady, async (ready) => { if (ready) navigateTo(await landingPath()) }, { immediate: true })
 </script>

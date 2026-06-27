@@ -130,13 +130,15 @@
 
 <script setup>
 const { user, signInEmail, signUpEmail, signInGoogle, waitAuthReady } = useAuth()
+const landingPath = useLanding()
 
 // Wait for Firebase to restore the session before deciding — otherwise this fires
 // with user.value still null (or mid-restore) and races the global auth guard,
-// ping-ponging /register ↔ /trips.
+// ping-ponging /register ↔ /trips. Land via membership-aware landingPath() so a
+// logged-in NON-member of this tenant goes to /join, not /trips (which would 403).
 onMounted(async () => {
   await waitAuthReady()
-  if (user.value) navigateTo('/trips')
+  if (user.value) navigateTo(await landingPath())
 })
 
 const tab = ref('signin')
@@ -175,7 +177,7 @@ async function handleSignIn() {
   loading.value = true
   try {
     await signInEmail(siForm.email, siForm.password)
-    navigateTo('/trips')
+    navigateTo(await landingPath())
   } catch (err) {
     error.value = firebaseError(err)
   } finally {
@@ -188,7 +190,7 @@ async function handleSignUp() {
   loading.value = true
   try {
     await signUpEmail(suForm.email, suForm.password, suForm.name.trim())
-    navigateTo('/trips')
+    navigateTo(await landingPath())
   } catch (err) {
     error.value = firebaseError(err)
   } finally {
@@ -205,7 +207,7 @@ async function handleGoogle() {
     if (!user.value?.name?.trim()) {
       navigateTo('/profile?setup=1')
     } else {
-      navigateTo('/trips')
+      navigateTo(await landingPath())
     }
   } catch (err) {
     const msg = firebaseError(err)
