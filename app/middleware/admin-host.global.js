@@ -14,6 +14,15 @@ export default defineNuxtRouteMiddleware((to) => {
   if (isAdminHost && to.path === '/') {
     return navigateTo('/admin')
   }
+  // Product-only pages don't exist on the console host: the gateway serves no
+  // /api/trips|/api/plan|tenant data here, so /trips' load fails and it bounces to
+  // /register, which (when logged in) redirects back to /trips → flicker loop. After
+  // login, register.vue/index.vue hardcode navigateTo('/trips'); catch those product
+  // paths here (before the page mounts) and land the operator on /admin instead.
+  const PRODUCT_ONLY = ['/trips', '/plan', '/join']
+  if (isAdminHost && PRODUCT_ONLY.some(p => to.path === p || to.path.startsWith(p + '/'))) {
+    return navigateTo('/admin')
+  }
   if (!isAdminHost && to.path.startsWith('/admin')) {
     return navigateTo('/')
   }
