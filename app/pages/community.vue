@@ -114,7 +114,7 @@ function formatDate(d) {
 }
 
 const REASON_LABELS = {
-  interest: '✨ In a country you love',
+  foryou: '✨ Picked for you',
   popular: '🔥 Popular',
   new: '🆕 Fresh',
 }
@@ -162,7 +162,7 @@ function reasonLabel(r) { return REASON_LABELS[r] || '' }
   font-size: 0.72rem;
   font-weight: 600;
 }
-.reason-interest { background: rgba(201,168,76,0.18); color: #8a6d20; }
+.reason-foryou  { background: rgba(201,168,76,0.18); color: #8a6d20; }
 .reason-popular  { background: rgba(192,57,43,0.12); color: var(--error); }
 .reason-new      { background: rgba(15,31,61,0.07); color: var(--navy); }
 
