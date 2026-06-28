@@ -11,7 +11,7 @@
 import { getDb } from '@travelmanager/shared/db'
 import { invalidate } from '@travelmanager/shared/cache'
 import { requireAdmin } from '../../../utils/admin.js'
-import { upsertProvisioningJob } from '../../../utils/tenants.js'
+import { upsertProvisioningJob, getProvisioningJob } from '../../../utils/tenants.js'
 import { traceHeaders } from '@travelmanager/shared/trace'
 
 export default defineEventHandler(async (event) => {
@@ -29,15 +29,22 @@ export default defineEventHandler(async (event) => {
   const provUrl = process.env.PROVISIONER_SERVICE_URL || 'http://localhost:3006'
   const headers = { ...traceHeaders(event), 'x-internal-token': process.env.PROVISIONER_INTERNAL_TOKEN || '' }
 
-  // ── Enterprise that NEVER built (failed/aborted apply: no cluster) ──
-  // Nothing exists in GCP to tear down, so don't spawn a destroy Job (it would just
-  // sit at "destroying…" and the list never finalizes it). Remove the rows directly.
+  // ── Enterprise where the provisioner NEVER ran (no create Job → no terraform
+  // state → no GCP infra) ──
+  // Only then is it safe to drop the rows directly. CAUTION: a create Job that ran but
+  // failed mid-apply (e.g. cluster built, helm step failed) leaves REAL infra with the
+  // tenant row still un-provisioned — that MUST go through the destroy Job below, or the
+  // cluster/SQL orphan in GCP. So gate on the absence of a create job, not provisioned_at.
   if (plan === 'enterprise' && !provisioned_at && !cluster_name) {
-    await db.query('DELETE FROM provisioning_jobs WHERE tenant_id = $1', [id])
-    await db.query(`UPDATE users SET tenant_id = 'default' WHERE tenant_id = $1`, [id])
-    await db.query('DELETE FROM tenants WHERE id = $1', [id])
-    invalidate(`tenant:${id}`)
-    return { ok: true, deleted: id }
+    const createdJob = await getProvisioningJob(id, 'create')
+    if (!createdJob) {
+      await db.query('DELETE FROM provisioning_jobs WHERE tenant_id = $1', [id])
+      await db.query(`UPDATE users SET tenant_id = 'default' WHERE tenant_id = $1`, [id])
+      await db.query('DELETE FROM tenants WHERE id = $1', [id])
+      invalidate(`tenant:${id}`)
+      return { ok: true, deleted: id }
+    }
+    // else fall through → destroy Job (terraform destroy cleans the partial infra).
   }
 
   // ── Enterprise: async destroy of the dedicated cluster ──
