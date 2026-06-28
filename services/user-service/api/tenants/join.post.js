@@ -10,6 +10,12 @@ export default defineEventHandler(async (event) => {
   const ctx = event.context.user
   if (!ctx?.uid) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
+  // A dedicated enterprise cluster has no access-code join — every user on the
+  // customer's own domain already belongs to the single tenant (see users POST).
+  if (process.env.FIXED_TENANT_ID) {
+    throw createError({ statusCode: 404, statusMessage: 'Not found' })
+  }
+
   const { code } = await readBody(event)
   const tenantId = ctx.tenantId
   if (!tenantId || tenantId === 'default') {

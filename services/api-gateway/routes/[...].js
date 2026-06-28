@@ -21,6 +21,35 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean)
 
+// Single-tenant ENTERPRISE cluster mode. When set, this gateway serves exactly one
+// tenant on the customer's OWN domain — there is no subdomain to parse and no admin
+// host. We short-circuit host→tenant resolution and the membership guard, stamping
+// a fixed tenant on every request. The control plane (admin, provisioner, metering
+// subscriber) lives only on the central cluster, so /api/admin is rejected here.
+const FIXED_TENANT_ID = process.env.FIXED_TENANT_ID || ''
+const FIXED_TENANT_PLAN = process.env.FIXED_TENANT_PLAN || 'enterprise'
+
+// Verify the caller's Firebase token (or accept a debug uid in skip-auth dev mode).
+// Returns { uid, email, name }; throws 401 on a missing/invalid token.
+async function authenticate(event) {
+  if (skipAuth) {
+    const dbgUid = event.node.req.headers['x-debug-uid']
+    if (!dbgUid) throw createError({ statusCode: 401, statusMessage: 'Missing x-debug-uid (skip-auth mode)' })
+    const dbgEmail = event.node.req.headers['x-debug-email']
+    return { uid: String(dbgUid), email: dbgEmail ? String(dbgEmail) : 'dev@example.com', name: 'Dev User' }
+  }
+  const authHeader = event.node.req.headers['authorization']
+  if (!authHeader?.startsWith('Bearer ')) {
+    throw createError({ statusCode: 401, statusMessage: 'Missing token' })
+  }
+  try {
+    const decoded = await getAuthClient().verifyIdToken(authHeader.slice(7))
+    return { uid: decoded.uid, email: decoded.email ?? '', name: decoded.name ?? '' }
+  } catch {
+    throw createError({ statusCode: 401, statusMessage: 'Invalid token' })
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const path = (event.path || '').split('?')[0]
 
@@ -36,6 +65,42 @@ export default defineEventHandler(async (event) => {
 
   const target = serviceUrl(serviceKey)
   if (!target) throw createError({ statusCode: 502, statusMessage: 'Service unavailable' })
+
+  // ── Fixed-tenant (enterprise dedicated cluster) ──
+  // No subdomain, no admin host, no membership guard: every request is this one
+  // enterprise tenant. The customer reaches us on their own domain (or the cluster's
+  // system hostname), which matches none of the central host rules — so we must NOT
+  // fall through to subdomainOf (it would resolve to apex/free) and instead stamp the
+  // fixed tenant directly.
+  if (FIXED_TENANT_ID) {
+    // The operator control plane never runs on a customer cluster.
+    if (path.startsWith('/api/admin')) throw createError({ statusCode: 404, statusMessage: 'Not found' })
+
+    // Public routes: proxy with the tenant header, no identity.
+    if (isPublic(path, event.method)) {
+      return proxyTo(event, tenantServiceUrl(serviceKey, FIXED_TENANT_ID) + event.path, { 'x-tenant-id': FIXED_TENANT_ID })
+    }
+
+    const identity = await authenticate(event)
+    const { role } = await resolveTenantPlan(identity.uid)
+    const plan = FIXED_TENANT_PLAN
+    const rate = getPlan(plan).rateLimitPerMin
+    if (!(await allow(identity.uid, rate))) {
+      throw createError({ statusCode: 429, statusMessage: 'Rate limit exceeded for your plan' })
+    }
+    const denied = featureGate(path, plan)
+    if (denied) throw createError({ statusCode: 403, statusMessage: denied })
+    if (plan !== 'free') meterApiRequest(FIXED_TENANT_ID)
+
+    return proxyTo(event, tenantServiceUrl(serviceKey, FIXED_TENANT_ID) + event.path, {
+      'x-user-uid': identity.uid,
+      'x-user-email': identity.email,
+      'x-user-name': encodeURIComponent(identity.name || ''),
+      'x-tenant-id': FIXED_TENANT_ID,
+      'x-plan': plan,
+      'x-role': role,
+    })
+  }
 
   // Host → subdomain → tenant.
   const host = event.node.req.headers['x-forwarded-host'] || event.node.req.headers['host']
@@ -65,24 +130,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Authenticate.
-  let identity
-  if (skipAuth) {
-    const dbgUid = event.node.req.headers['x-debug-uid']
-    if (!dbgUid) throw createError({ statusCode: 401, statusMessage: 'Missing x-debug-uid (skip-auth mode)' })
-    const dbgEmail = event.node.req.headers['x-debug-email']
-    identity = { uid: String(dbgUid), email: dbgEmail ? String(dbgEmail) : 'dev@example.com', name: 'Dev User' }
-  } else {
-    const authHeader = event.node.req.headers['authorization']
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw createError({ statusCode: 401, statusMessage: 'Missing token' })
-    }
-    try {
-      const decoded = await getAuthClient().verifyIdToken(authHeader.slice(7))
-      identity = { uid: decoded.uid, email: decoded.email ?? '', name: decoded.name ?? '' }
-    } catch {
-      throw createError({ statusCode: 401, statusMessage: 'Invalid token' })
-    }
-  }
+  const identity = await authenticate(event)
 
   // Admin host: operators only (email allowlist). Operate on the control-plane
   // (shared DB / default tenant) with full access.

@@ -1,10 +1,17 @@
-// DELETE /api/admin/tenants/:id — offboard a standard tenant: tear down its
-// Postgres pod + PVC (via the provisioner), move its members back to the free
-// 'default' tenant, and remove the tenant row. The tenant's trips/feed data lives
-// only in that pod's volume and is destroyed with it. Cannot delete 'default'.
+// DELETE /api/admin/tenants/:id — offboard a tenant.
+//
+// Standard: tear down its Postgres pod + PVC (via the provisioner), move members
+// back to the free 'default' tenant, and remove the tenant row — synchronously.
+//
+// Enterprise: destroying a dedicated GKE cluster + Cloud SQL takes 10+ min, so we
+// fire a Terraform destroy Job, mark the tenant 'destroying', move members back to
+// free, and return 202. The admin status poll (GET /api/admin/tenants/:id) reconciles
+// the destroy Job and finalizes removal once it completes — keeping the row (and its
+// cluster handle) until then so the cloud resources can't silently leak.
 import { getDb } from '@travelmanager/shared/db'
 import { invalidate } from '@travelmanager/shared/cache'
 import { requireAdmin } from '../../../utils/admin.js'
+import { upsertProvisioningJob } from '../../../utils/tenants.js'
 import { traceHeaders } from '@travelmanager/shared/trace'
 
 export default defineEventHandler(async (event) => {
@@ -15,14 +22,36 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = getDb()
-  const { rows } = await db.query('SELECT id, subdomain FROM tenants WHERE id = $1', [id])
+  const { rows } = await db.query('SELECT id, plan, subdomain FROM tenants WHERE id = $1', [id])
   if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Tenant not found' })
-  const sub = rows[0].subdomain
+  const { plan, subdomain: sub } = rows[0]
 
-  // 1. Tear down the dedicated Postgres pod + PVC + Service + NetworkPolicy.
   const provUrl = process.env.PROVISIONER_SERVICE_URL || 'http://localhost:3006'
+  const headers = { ...traceHeaders(event), 'x-internal-token': process.env.PROVISIONER_INTERNAL_TOKEN || '' }
+
+  // ── Enterprise: async destroy of the dedicated cluster ──
+  if (plan === 'enterprise') {
+    let res
+    try {
+      res = await $fetch('/api/internal/deprovision-tenant', {
+        method: 'POST', baseURL: provUrl, headers, body: { tenantId: id, plan },
+      })
+    } catch (e) {
+      throw createError({ statusCode: 502, statusMessage: `Cluster teardown failed to start: ${e?.data?.statusMessage || e?.message || e}` })
+    }
+    await upsertProvisioningJob(id, 'destroy', { status: 'running', job_name: res?.job || null })
+    // Mark destroying (so the status poll reconciles the destroy Job) and unorphan members.
+    await db.query(`UPDATE tenants SET tls_status = 'destroying' WHERE id = $1`, [id])
+    await db.query(`UPDATE users SET tenant_id = 'default' WHERE tenant_id = $1`, [id])
+    invalidate(`tenant:${id}`)
+    setResponseStatus(event, 202)
+    return { ok: true, status: 'destroying', id }
+  }
+
+  // ── Standard: synchronous pod teardown ──
+  // 1. Tear down the dedicated Postgres pod + PVC + Service + NetworkPolicy.
   try {
-    await $fetch('/api/internal/deprovision-tenant', { method: 'POST', baseURL: provUrl, headers: { ...traceHeaders(event), 'x-internal-token': process.env.PROVISIONER_INTERNAL_TOKEN || '' }, body: { tenantId: id } })
+    await $fetch('/api/internal/deprovision-tenant', { method: 'POST', baseURL: provUrl, headers, body: { tenantId: id } })
   } catch (e) {
     throw createError({ statusCode: 502, statusMessage: `Pod teardown failed: ${e?.data?.statusMessage || e?.message || e}` })
   }

@@ -9,6 +9,12 @@ declare module "nitropack/types" {
     '/healthz': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../routes/healthz.get').default>>>>
     }
+    '/metrics': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../routes/metrics.get').default>>>>
+    }
+    '/tasks/flush-usage': {
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../routes/tasks/flush-usage.post').default>>>>
+    }
   }
 }
 export {}

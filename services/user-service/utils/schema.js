@@ -25,6 +25,17 @@ export async function initUserDb(db = getDb()) {
     -- join it (the operator hands this to the customer). NULL for the free apex.
     ALTER TABLE tenants ADD COLUMN IF NOT EXISTS signup_code       TEXT;
 
+    -- Enterprise tier: this tenant runs on its OWN dedicated GKE cluster (not a
+    -- pod on the shared cluster). These columns capture the cluster's identity and
+    -- networking so the admin console can surface the ingress IP (customer points
+    -- their own DNS at it) and track custom-domain TLS readiness. NULL for free /
+    -- standard tenants (which have no dedicated cluster).
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS cluster_name             TEXT;
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS ingress_ip               TEXT;
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS system_hostname          TEXT;
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS custom_domain_verified_at TIMESTAMPTZ;
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tls_status               TEXT;
+
     -- One subdomain per tenant (NULLs allowed: the default/free tenant is the apex).
     CREATE UNIQUE INDEX IF NOT EXISTS tenants_subdomain_idx ON tenants (subdomain) WHERE subdomain IS NOT NULL;
 
@@ -49,5 +60,43 @@ export async function initUserDb(db = getDb()) {
       role         TEXT        NOT NULL DEFAULT 'traveler',
       created_at   TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- Enterprise provisioning jobs. An enterprise tenant is built by a Terraform
+    -- Kubernetes Job (creates a dedicated GKE cluster + Cloud SQL — 10-15 min) and
+    -- torn down the same way. This control-plane table is the durable audit trail
+    -- of those long-running Jobs; status is reconciled from the provisioner's live
+    -- view of the k8s Job each time the admin console polls. kind=create|destroy.
+    CREATE TABLE IF NOT EXISTS provisioning_jobs (
+      id              BIGSERIAL   PRIMARY KEY,
+      tenant_id       TEXT        NOT NULL,
+      kind            TEXT        NOT NULL,
+      status          TEXT        NOT NULL DEFAULT 'pending',
+      job_name        TEXT,
+      cluster_name    TEXT,
+      ingress_ip      TEXT,
+      system_hostname TEXT,
+      error           TEXT,
+      started_at      TIMESTAMPTZ DEFAULT NOW(),
+      finished_at     TIMESTAMPTZ,
+      updated_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- One in-flight job row per tenant+kind (re-running an apply updates it in place).
+    CREATE UNIQUE INDEX IF NOT EXISTS provisioning_jobs_tenant_kind_idx
+      ON provisioning_jobs (tenant_id, kind);
   `)
+
+  // On a dedicated ENTERPRISE cluster, seed this cluster's single tenant row so
+  // white-label config (/api/tenants/current) and plan resolution return the
+  // enterprise tier rather than falling back to the free apex. FIXED_TENANT_ID is
+  // set only in the enterprise cluster's deployment values.
+  const fixedTenant = process.env.FIXED_TENANT_ID
+  if (fixedTenant) {
+    await db.query(
+      `INSERT INTO tenants (id, name, plan, provisioned_at)
+       VALUES ($1, $2, 'enterprise', NOW())
+       ON CONFLICT (id) DO UPDATE SET plan = 'enterprise'`,
+      [fixedTenant, process.env.FIXED_TENANT_NAME || fixedTenant]
+    )
+  }
 }

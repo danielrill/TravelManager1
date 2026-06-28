@@ -9,8 +9,14 @@ declare module "nitropack/types" {
     '/api/internal/deprovision-tenant': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/deprovision-tenant.post').default>>>>
     }
+    '/api/internal/enterprise-status': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/enterprise-status.get').default>>>>
+    }
     '/api/internal/provision-tenant': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/provision-tenant.post').default>>>>
+    }
+    '/api/metrics': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/metrics.get').default>>>>
     }
     '/api/ready': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/ready.get').default>>>>

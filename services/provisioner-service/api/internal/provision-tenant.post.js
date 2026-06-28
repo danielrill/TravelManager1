@@ -3,6 +3,7 @@
 // x-internal-token gated); called by the user-service onboarding flows. Idempotent
 // — safe to retry on failure.
 import { provisionTenant } from '../../utils/provision.js'
+import { applyEnterprise } from '../../utils/enterprise.js'
 
 // Tiers that get dedicated infrastructure. `free` shares the control-plane DB and
 // must NEVER be provisioned here — gate it at the boundary so even an authenticated
@@ -16,6 +17,23 @@ export default defineEventHandler(async (event) => {
   if (!PAID_PLANS.has(plan)) {
     throw createError({ statusCode: 400, statusMessage: `plan must be one of ${[...PAID_PLANS].join(', ')} (got ${plan ?? 'none'})` })
   }
+
+  // Enterprise: a DEDICATED GKE cluster + Cloud SQL, built by a Terraform Job. This
+  // is a different code path from the standard pod model (provisionTenant) — it must
+  // NEVER spin up Postgres/app pods on the shared cluster. Fire the Job and return
+  // immediately; the caller polls /api/internal/enterprise-status (cluster create is
+  // ~10-15 min, far longer than any HTTP request can hold).
+  if (plan === 'enterprise') {
+    try {
+      const res = await applyEnterprise(String(tenantId))
+      setResponseStatus(event, 202)
+      return { ok: true, enterprise: true, status: 'provisioning', ...res }
+    } catch (e) {
+      console.error('[provisioner] enterprise apply failed to start', e)
+      throw createError({ statusCode: 500, statusMessage: `Enterprise provisioning failed: ${e?.message || e}` })
+    }
+  }
+
   try {
     const report = await provisionTenant(String(tenantId))
     return { ok: true, ...report }

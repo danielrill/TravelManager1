@@ -5,6 +5,7 @@ declare module "nitropack/types" {
   interface InternalApi {
     '/api/admin/tenants/:id': {
       'delete': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/admin/tenants/[id].delete').default>>>>
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/admin/tenants/[id].get').default>>>>
       'put': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/admin/tenants/[id].put').default>>>>
     }
     '/api/admin/tenants': {
@@ -31,17 +32,26 @@ declare module "nitropack/types" {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/users/[id].get').default>>>>
       'patch': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/internal/users/[id].patch').default>>>>
     }
+    '/api/metrics': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/metrics.get').default>>>>
+    }
     '/api/ready': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/ready.get').default>>>>
     }
     '/api/tenants/:id': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/tenants/[id].get').default>>>>
     }
+    '/api/tenants/:id/status': {
+      'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/tenants/[id]/status.get').default>>>>
+    }
     '/api/tenants/current': {
       'get': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/tenants/current.get').default>>>>
     }
     '/api/tenants/join': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/tenants/join.post').default>>>>
+    }
+    '/api/tenants/self-serve': {
+      'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/tenants/self-serve.post').default>>>>
     }
     '/api/tenants/verify-code': {
       'post': Simplify<Serialize<Awaited<ReturnType<typeof import('../../api/tenants/verify-code.post').default>>>>

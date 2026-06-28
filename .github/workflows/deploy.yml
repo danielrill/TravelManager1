@@ -119,3 +119,54 @@ jobs:
           docker push "$IMG:${TAG}"
           docker push "$IMG:${GITHUB_SHA}"
           docker push "$IMG:latest"
+
+  # Immutable terraform+helm image the provisioner-service runs as a Job to build a
+  # dedicated enterprise cluster. Its build context (terraform_enterprise/ module +
+  # Helm chart + Dockerfile) lives in the sibling TravelManagerIaC repo, so we check
+  # that out (IAC_REPO_TOKEN: a PAT with read access to it) and build from there.
+  # Tagged with the SAME tag as the app so an enterprise cluster gets a matching app
+  # version. WIF is scoped to this repo, so the build must run here (not in the IaC repo).
+  enterprise-provisioner:
+    needs: [test, prep]
+    runs-on: ubuntu-latest
+    # Requires IAC_REPO_TOKEN (PAT for the sibling IaC repo). Until that secret is
+    # set, this job exits cleanly and leaves the rest of the pipeline green.
+    env:
+      IAC_REPO_TOKEN: ${{ secrets.IAC_REPO_TOKEN }}
+    steps:
+      - name: Check IaC repo token
+        id: iac-token
+        run: |
+          if [ -n "$IAC_REPO_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "IAC_REPO_TOKEN is not set; skipping enterprise-provisioner image build."
+          fi
+      - name: Checkout IaC repo (build context)
+        if: steps.iac-token.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: cikoglukai/TravelManagerIaC
+          token: ${{ env.IAC_REPO_TOKEN }}
+          path: iac
+      - id: auth
+        if: steps.iac-token.outputs.available == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DEPLOY_SA }}
+      - if: steps.iac-token.outputs.available == 'true'
+        uses: google-github-actions/setup-gcloud@v2
+      - if: steps.iac-token.outputs.available == 'true'
+        run: gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+      - name: Build & push enterprise-provisioner
+        if: steps.iac-token.outputs.available == 'true'
+        run: |
+          IMG="${REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/travelmanager/enterprise-provisioner"
+          TAG="${{ needs.prep.outputs.tag }}"
+          docker build -f iac/enterprise-provisioner/Dockerfile \
+            -t "$IMG:${TAG}" -t "$IMG:${GITHUB_SHA}" -t "$IMG:latest" iac
+          docker push "$IMG:${TAG}"
+          docker push "$IMG:${GITHUB_SHA}"
+          docker push "$IMG:latest"

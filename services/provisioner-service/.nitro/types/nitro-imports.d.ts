@@ -1,23 +1,28 @@
 declare global {
+  const appEnv: typeof import('../../utils/k8s').appEnv
   const appendCorsHeaders: typeof import('../../../../node_modules/h3').appendCorsHeaders
   const appendCorsPreflightHeaders: typeof import('../../../../node_modules/h3').appendCorsPreflightHeaders
   const appendHeader: typeof import('../../../../node_modules/h3').appendHeader
   const appendHeaders: typeof import('../../../../node_modules/h3').appendHeaders
   const appendResponseHeader: typeof import('../../../../node_modules/h3').appendResponseHeader
   const appendResponseHeaders: typeof import('../../../../node_modules/h3').appendResponseHeaders
+  const applyEnterprise: typeof import('../../utils/enterprise').applyEnterprise
   const assertMethod: typeof import('../../../../node_modules/h3').assertMethod
   const cachedEventHandler: typeof import('../../../../node_modules/nitropack/dist/runtime/internal/cache').cachedEventHandler
   const cachedFunction: typeof import('../../../../node_modules/nitropack/dist/runtime/internal/cache').cachedFunction
   const callNodeListener: typeof import('../../../../node_modules/h3').callNodeListener
   const clearResponseHeaders: typeof import('../../../../node_modules/h3').clearResponseHeaders
   const clearSession: typeof import('../../../../node_modules/h3').clearSession
+  const countServiceNegs: typeof import('../../utils/k8s').countServiceNegs
   const createApp: typeof import('../../../../node_modules/h3').createApp
   const createAppEventHandler: typeof import('../../../../node_modules/h3').createAppEventHandler
   const createError: typeof import('../../../../node_modules/h3').createError
   const createEvent: typeof import('../../../../node_modules/h3').createEvent
   const createEventStream: typeof import('../../../../node_modules/h3').createEventStream
   const createRouter: typeof import('../../../../node_modules/h3').createRouter
+  const createTenantApps: typeof import('../../utils/k8s').createTenantApps
   const createTenantPostgres: typeof import('../../utils/k8s').createTenantPostgres
+  const dedicatedServices: typeof import('../../utils/k8s').dedicatedServices
   const defaultContentType: typeof import('../../../../node_modules/h3').defaultContentType
   const defineCachedEventHandler: typeof import('../../../../node_modules/nitropack/dist/runtime/internal/cache').defineCachedEventHandler
   const defineCachedFunction: typeof import('../../../../node_modules/nitropack/dist/runtime/internal/cache').defineCachedFunction
@@ -35,8 +40,12 @@ declare global {
   const defineWebSocket: typeof import('../../../../node_modules/h3').defineWebSocket
   const defineWebSocketHandler: typeof import('../../../../node_modules/h3').defineWebSocketHandler
   const deleteCookie: typeof import('../../../../node_modules/h3').deleteCookie
+  const deleteTenantApps: typeof import('../../utils/k8s').deleteTenantApps
   const deleteTenantPostgres: typeof import('../../utils/k8s').deleteTenantPostgres
+  const destroyEnterprise: typeof import('../../utils/enterprise').destroyEnterprise
   const dynamicEventHandler: typeof import('../../../../node_modules/h3').dynamicEventHandler
+  const enterpriseEnabled: typeof import('../../utils/enterprise').enterpriseEnabled
+  const enterpriseStatus: typeof import('../../utils/enterprise').enterpriseStatus
   const eventHandler: typeof import('../../../../node_modules/h3').eventHandler
   const fetchWithEvent: typeof import('../../../../node_modules/h3').fetchWithEvent
   const fromNodeMiddleware: typeof import('../../../../node_modules/h3').fromNodeMiddleware
@@ -103,6 +112,7 @@ declare global {
   const sendStream: typeof import('../../../../node_modules/h3').sendStream
   const sendWebResponse: typeof import('../../../../node_modules/h3').sendWebResponse
   const serveStatic: typeof import('../../../../node_modules/h3').serveStatic
+  const serviceAccountFor: typeof import('../../utils/k8s').serviceAccountFor
   const setCookie: typeof import('../../../../node_modules/h3').setCookie
   const setHeader: typeof import('../../../../node_modules/h3').setHeader
   const setHeaders: typeof import('../../../../node_modules/h3').setHeaders
@@ -110,6 +120,7 @@ declare global {
   const setResponseHeaders: typeof import('../../../../node_modules/h3').setResponseHeaders
   const setResponseStatus: typeof import('../../../../node_modules/h3').setResponseStatus
   const splitCookiesString: typeof import('../../../../node_modules/h3').splitCookiesString
+  const tenantNegCount: typeof import('../../utils/k8s').tenantNegCount
   const toEventHandler: typeof import('../../../../node_modules/h3').toEventHandler
   const toNodeListener: typeof import('../../../../node_modules/h3').toNodeListener
   const toPlainHandler: typeof import('../../../../node_modules/h3').toPlainHandler
@@ -124,6 +135,7 @@ declare global {
   const useRuntimeConfig: typeof import('../../../../node_modules/nitropack/dist/runtime/internal/config').useRuntimeConfig
   const useSession: typeof import('../../../../node_modules/h3').useSession
   const useStorage: typeof import('../../../../node_modules/nitropack/dist/runtime/internal/storage').useStorage
+  const waitForTenantApps: typeof import('../../utils/k8s').waitForTenantApps
   const waitForTenantPostgres: typeof import('../../utils/k8s').waitForTenantPostgres
   const writeEarlyHints: typeof import('../../../../node_modules/h3').writeEarlyHints
 }
@@ -139,5 +151,6 @@ export { useEvent } from 'nitropack/runtime/internal/context';
 export { defineTask, runTask } from 'nitropack/runtime/internal/task';
 export { defineNitroErrorHandler } from 'nitropack/runtime/internal/error/utils';
 export { appendCorsHeaders, appendCorsPreflightHeaders, appendHeader, appendHeaders, appendResponseHeader, appendResponseHeaders, assertMethod, callNodeListener, clearResponseHeaders, clearSession, createApp, createAppEventHandler, createError, createEvent, createEventStream, createRouter, defaultContentType, defineEventHandler, defineLazyEventHandler, defineNodeListener, defineNodeMiddleware, defineRequestMiddleware, defineResponseMiddleware, defineWebSocket, defineWebSocketHandler, deleteCookie, dynamicEventHandler, eventHandler, fetchWithEvent, fromNodeMiddleware, fromPlainHandler, fromWebHandler, getCookie, getHeader, getHeaders, getMethod, getProxyRequestHeaders, getQuery, getRequestFingerprint, getRequestHeader, getRequestHeaders, getRequestHost, getRequestIP, getRequestPath, getRequestProtocol, getRequestURL, getRequestWebStream, getResponseHeader, getResponseHeaders, getResponseStatus, getResponseStatusText, getRouterParam, getRouterParams, getSession, getValidatedQuery, getValidatedRouterParams, handleCacheHeaders, handleCors, isCorsOriginAllowed, isError, isEvent, isEventHandler, isMethod, isPreflightRequest, isStream, isWebResponse, lazyEventHandler, parseCookies, promisifyNodeListener, proxyRequest, readBody, readFormData, readMultipartFormData, readRawBody, readValidatedBody, removeResponseHeader, sanitizeStatusCode, sanitizeStatusMessage, sealSession, send, sendError, sendIterable, sendNoContent, sendProxy, sendRedirect, sendStream, sendWebResponse, serveStatic, setCookie, setHeader, setHeaders, setResponseHeader, setResponseHeaders, setResponseStatus, splitCookiesString, toEventHandler, toNodeListener, toPlainHandler, toWebHandler, toWebRequest, unsealSession, updateSession, useBase, useSession, writeEarlyHints } from 'h3';
-export { k8sEnabled, createTenantPostgres, waitForTenantPostgres, deleteTenantPostgres } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/provisioner-service/utils/k8s';
+export { enterpriseEnabled, applyEnterprise, destroyEnterprise, enterpriseStatus } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/provisioner-service/utils/enterprise';
+export { k8sEnabled, createTenantPostgres, waitForTenantPostgres, dedicatedServices, serviceAccountFor, appEnv, createTenantApps, waitForTenantApps, countServiceNegs, tenantNegCount, deleteTenantApps, deleteTenantPostgres } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/provisioner-service/utils/k8s';
 export { provisionTenant } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/provisioner-service/utils/provision';

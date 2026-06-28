@@ -1,5 +1,4 @@
 declare global {
-  const allow: typeof import('../../utils/ratelimit').allow
   const appendCorsHeaders: typeof import('../../../../node_modules/h3').appendCorsHeaders
   const appendCorsPreflightHeaders: typeof import('../../../../node_modules/h3').appendCorsPreflightHeaders
   const appendHeader: typeof import('../../../../node_modules/h3').appendHeader
@@ -12,6 +11,8 @@ declare global {
   const callNodeListener: typeof import('../../../../node_modules/h3').callNodeListener
   const clearResponseHeaders: typeof import('../../../../node_modules/h3').clearResponseHeaders
   const clearSession: typeof import('../../../../node_modules/h3').clearSession
+  const control: typeof import('../../utils/control').control
+  const countTenantSeats: typeof import('../../utils/tenants').countTenantSeats
   const createApp: typeof import('../../../../node_modules/h3').createApp
   const createAppEventHandler: typeof import('../../../../node_modules/h3').createAppEventHandler
   const createError: typeof import('../../../../node_modules/h3').createError
@@ -37,7 +38,6 @@ declare global {
   const deleteCookie: typeof import('../../../../node_modules/h3').deleteCookie
   const dynamicEventHandler: typeof import('../../../../node_modules/h3').dynamicEventHandler
   const eventHandler: typeof import('../../../../node_modules/h3').eventHandler
-  const featureGate: typeof import('../../utils/routing').featureGate
   const fetchWithEvent: typeof import('../../../../node_modules/h3').fetchWithEvent
   const fromNodeMiddleware: typeof import('../../../../node_modules/h3').fromNodeMiddleware
   const fromPlainHandler: typeof import('../../../../node_modules/h3').fromPlainHandler
@@ -69,34 +69,34 @@ declare global {
   const getValidatedRouterParams: typeof import('../../../../node_modules/h3').getValidatedRouterParams
   const handleCacheHeaders: typeof import('../../../../node_modules/h3').handleCacheHeaders
   const handleCors: typeof import('../../../../node_modules/h3').handleCors
-  const isAdminSub: typeof import('../../utils/tenant-host').isAdminSub
-  const isBlocked: typeof import('../../utils/routing').isBlocked
+  const handleUsage: typeof import('../../utils/ingest').handleUsage
+  const initMeteringDb: typeof import('../../utils/schema').initMeteringDb
   const isCorsOriginAllowed: typeof import('../../../../node_modules/h3').isCorsOriginAllowed
   const isError: typeof import('../../../../node_modules/h3').isError
   const isEvent: typeof import('../../../../node_modules/h3').isEvent
   const isEventHandler: typeof import('../../../../node_modules/h3').isEventHandler
-  const isJoinBootstrap: typeof import('../../utils/routing').isJoinBootstrap
   const isMethod: typeof import('../../../../node_modules/h3').isMethod
   const isPreflightRequest: typeof import('../../../../node_modules/h3').isPreflightRequest
-  const isPublic: typeof import('../../utils/routing').isPublic
   const isStream: typeof import('../../../../node_modules/h3').isStream
   const isWebResponse: typeof import('../../../../node_modules/h3').isWebResponse
   const lazyEventHandler: typeof import('../../../../node_modules/h3').lazyEventHandler
-  const meterApiRequest: typeof import('../../utils/usage-meter').meterApiRequest
+  const listBillableTenants: typeof import('../../utils/tenants').listBillableTenants
+  const loadOverrides: typeof import('../../utils/billing').loadOverrides
+  const loadPlanCard: typeof import('../../utils/billing').loadPlanCard
+  const loadUsage: typeof import('../../utils/billing').loadUsage
   const nitroPlugin: typeof import('../../../../node_modules/nitropack/dist/runtime/internal/plugin').nitroPlugin
   const parseCookies: typeof import('../../../../node_modules/h3').parseCookies
+  const projectCost: typeof import('../../utils/billing').projectCost
   const promisifyNodeListener: typeof import('../../../../node_modules/h3').promisifyNodeListener
   const proxyRequest: typeof import('../../../../node_modules/h3').proxyRequest
-  const proxyTo: typeof import('../../utils/proxy').proxyTo
   const readBody: typeof import('../../../../node_modules/h3').readBody
   const readFormData: typeof import('../../../../node_modules/h3').readFormData
   const readMultipartFormData: typeof import('../../../../node_modules/h3').readMultipartFormData
   const readRawBody: typeof import('../../../../node_modules/h3').readRawBody
   const readValidatedBody: typeof import('../../../../node_modules/h3').readValidatedBody
+  const readiness: typeof import('../../utils/ready').readiness
   const removeResponseHeader: typeof import('../../../../node_modules/h3').removeResponseHeader
-  const resolveService: typeof import('../../utils/routing').resolveService
-  const resolveTenantByHost: typeof import('../../utils/tenant-host').resolveTenantByHost
-  const resolveTenantPlan: typeof import('../../utils/resolve').resolveTenantPlan
+  const requireAdmin: typeof import('../../utils/admin').requireAdmin
   const runTask: typeof import('../../../../node_modules/nitropack/dist/runtime/internal/task').runTask
   const sanitizeStatusCode: typeof import('../../../../node_modules/h3').sanitizeStatusCode
   const sanitizeStatusMessage: typeof import('../../../../node_modules/h3').sanitizeStatusMessage
@@ -110,16 +110,14 @@ declare global {
   const sendStream: typeof import('../../../../node_modules/h3').sendStream
   const sendWebResponse: typeof import('../../../../node_modules/h3').sendWebResponse
   const serveStatic: typeof import('../../../../node_modules/h3').serveStatic
-  const serviceUrl: typeof import('../../utils/routing').serviceUrl
   const setCookie: typeof import('../../../../node_modules/h3').setCookie
   const setHeader: typeof import('../../../../node_modules/h3').setHeader
   const setHeaders: typeof import('../../../../node_modules/h3').setHeaders
   const setResponseHeader: typeof import('../../../../node_modules/h3').setResponseHeader
   const setResponseHeaders: typeof import('../../../../node_modules/h3').setResponseHeaders
   const setResponseStatus: typeof import('../../../../node_modules/h3').setResponseStatus
+  const shapeBulk: typeof import('../../utils/bulk-usage').shapeBulk
   const splitCookiesString: typeof import('../../../../node_modules/h3').splitCookiesString
-  const subdomainOf: typeof import('../../utils/tenant-host').subdomainOf
-  const tenantServiceUrl: typeof import('../../utils/routing').tenantServiceUrl
   const toEventHandler: typeof import('../../../../node_modules/h3').toEventHandler
   const toNodeListener: typeof import('../../../../node_modules/h3').toNodeListener
   const toPlainHandler: typeof import('../../../../node_modules/h3').toPlainHandler
@@ -148,9 +146,11 @@ export { useEvent } from 'nitropack/runtime/internal/context';
 export { defineTask, runTask } from 'nitropack/runtime/internal/task';
 export { defineNitroErrorHandler } from 'nitropack/runtime/internal/error/utils';
 export { appendCorsHeaders, appendCorsPreflightHeaders, appendHeader, appendHeaders, appendResponseHeader, appendResponseHeaders, assertMethod, callNodeListener, clearResponseHeaders, clearSession, createApp, createAppEventHandler, createError, createEvent, createEventStream, createRouter, defaultContentType, defineEventHandler, defineLazyEventHandler, defineNodeListener, defineNodeMiddleware, defineRequestMiddleware, defineResponseMiddleware, defineWebSocket, defineWebSocketHandler, deleteCookie, dynamicEventHandler, eventHandler, fetchWithEvent, fromNodeMiddleware, fromPlainHandler, fromWebHandler, getCookie, getHeader, getHeaders, getMethod, getProxyRequestHeaders, getQuery, getRequestFingerprint, getRequestHeader, getRequestHeaders, getRequestHost, getRequestIP, getRequestPath, getRequestProtocol, getRequestURL, getRequestWebStream, getResponseHeader, getResponseHeaders, getResponseStatus, getResponseStatusText, getRouterParam, getRouterParams, getSession, getValidatedQuery, getValidatedRouterParams, handleCacheHeaders, handleCors, isCorsOriginAllowed, isError, isEvent, isEventHandler, isMethod, isPreflightRequest, isStream, isWebResponse, lazyEventHandler, parseCookies, promisifyNodeListener, proxyRequest, readBody, readFormData, readMultipartFormData, readRawBody, readValidatedBody, removeResponseHeader, sanitizeStatusCode, sanitizeStatusMessage, sealSession, send, sendError, sendIterable, sendNoContent, sendProxy, sendRedirect, sendStream, sendWebResponse, serveStatic, setCookie, setHeader, setHeaders, setResponseHeader, setResponseHeaders, setResponseStatus, splitCookiesString, toEventHandler, toNodeListener, toPlainHandler, toWebHandler, toWebRequest, unsealSession, updateSession, useBase, useSession, writeEarlyHints } from 'h3';
-export { proxyTo } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/api-gateway/utils/proxy';
-export { allow } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/api-gateway/utils/ratelimit';
-export { resolveTenantPlan } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/api-gateway/utils/resolve';
-export { resolveService, serviceUrl, tenantServiceUrl, isPublic, isJoinBootstrap, isBlocked, featureGate } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/api-gateway/utils/routing';
-export { subdomainOf, isAdminSub, resolveTenantByHost } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/api-gateway/utils/tenant-host';
-export { meterApiRequest } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/api-gateway/utils/usage-meter';
+export { requireAdmin } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/metering-service/utils/admin';
+export { loadPlanCard, loadOverrides, loadUsage, projectCost } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/metering-service/utils/billing';
+export { shapeBulk } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/metering-service/utils/bulk-usage';
+export { control } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/metering-service/utils/control';
+export { handleUsage } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/metering-service/utils/ingest';
+export { readiness } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/metering-service/utils/ready';
+export { initMeteringDb } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/metering-service/utils/schema';
+export { listBillableTenants, countTenantSeats } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/metering-service/utils/tenants';

@@ -1,5 +1,6 @@
 declare global {
   const PLANS: typeof import('../../utils/tenants').PLANS
+  const PaymentError: typeof import('../../utils/payments').PaymentError
   const appendCorsHeaders: typeof import('../../../../node_modules/h3').appendCorsHeaders
   const appendCorsPreflightHeaders: typeof import('../../../../node_modules/h3').appendCorsPreflightHeaders
   const appendHeader: typeof import('../../../../node_modules/h3').appendHeader
@@ -47,6 +48,7 @@ declare global {
   const getHeader: typeof import('../../../../node_modules/h3').getHeader
   const getHeaders: typeof import('../../../../node_modules/h3').getHeaders
   const getMethod: typeof import('../../../../node_modules/h3').getMethod
+  const getProvisioningJob: typeof import('../../utils/tenants').getProvisioningJob
   const getProxyRequestHeaders: typeof import('../../../../node_modules/h3').getProxyRequestHeaders
   const getQuery: typeof import('../../../../node_modules/h3').getQuery
   const getRequestFingerprint: typeof import('../../../../node_modules/h3').getRequestFingerprint
@@ -113,6 +115,7 @@ declare global {
   const setResponseHeader: typeof import('../../../../node_modules/h3').setResponseHeader
   const setResponseHeaders: typeof import('../../../../node_modules/h3').setResponseHeaders
   const setResponseStatus: typeof import('../../../../node_modules/h3').setResponseStatus
+  const setTenantClusterInfo: typeof import('../../utils/tenants').setTenantClusterInfo
   const splitCookiesString: typeof import('../../../../node_modules/h3').splitCookiesString
   const toEventHandler: typeof import('../../../../node_modules/h3').toEventHandler
   const toNodeListener: typeof import('../../../../node_modules/h3').toNodeListener
@@ -121,6 +124,7 @@ declare global {
   const toWebRequest: typeof import('../../../../node_modules/h3').toWebRequest
   const unsealSession: typeof import('../../../../node_modules/h3').unsealSession
   const updateSession: typeof import('../../../../node_modules/h3').updateSession
+  const upsertProvisioningJob: typeof import('../../utils/tenants').upsertProvisioningJob
   const upsertTenant: typeof import('../../utils/tenants').upsertTenant
   const useAppConfig: typeof import('../../../../node_modules/nitropack/dist/runtime/internal/config').useAppConfig
   const useBase: typeof import('../../../../node_modules/h3').useBase
@@ -130,6 +134,7 @@ declare global {
   const useSession: typeof import('../../../../node_modules/h3').useSession
   const useStorage: typeof import('../../../../node_modules/nitropack/dist/runtime/internal/storage').useStorage
   const validateSubdomain: typeof import('../../utils/admin').validateSubdomain
+  const verifyOnboardingPayment: typeof import('../../utils/payments').verifyOnboardingPayment
   const writeEarlyHints: typeof import('../../../../node_modules/h3').writeEarlyHints
 }
 export { useNitroApp } from 'nitropack/runtime/internal/app';
@@ -145,6 +150,7 @@ export { defineTask, runTask } from 'nitropack/runtime/internal/task';
 export { defineNitroErrorHandler } from 'nitropack/runtime/internal/error/utils';
 export { appendCorsHeaders, appendCorsPreflightHeaders, appendHeader, appendHeaders, appendResponseHeader, appendResponseHeaders, assertMethod, callNodeListener, clearResponseHeaders, clearSession, createApp, createAppEventHandler, createError, createEvent, createEventStream, createRouter, defaultContentType, defineEventHandler, defineLazyEventHandler, defineNodeListener, defineNodeMiddleware, defineRequestMiddleware, defineResponseMiddleware, defineWebSocket, defineWebSocketHandler, deleteCookie, dynamicEventHandler, eventHandler, fetchWithEvent, fromNodeMiddleware, fromPlainHandler, fromWebHandler, getCookie, getHeader, getHeaders, getMethod, getProxyRequestHeaders, getQuery, getRequestFingerprint, getRequestHeader, getRequestHeaders, getRequestHost, getRequestIP, getRequestPath, getRequestProtocol, getRequestURL, getRequestWebStream, getResponseHeader, getResponseHeaders, getResponseStatus, getResponseStatusText, getRouterParam, getRouterParams, getSession, getValidatedQuery, getValidatedRouterParams, handleCacheHeaders, handleCors, isCorsOriginAllowed, isError, isEvent, isEventHandler, isMethod, isPreflightRequest, isStream, isWebResponse, lazyEventHandler, parseCookies, promisifyNodeListener, proxyRequest, readBody, readFormData, readMultipartFormData, readRawBody, readValidatedBody, removeResponseHeader, sanitizeStatusCode, sanitizeStatusMessage, sealSession, send, sendError, sendIterable, sendNoContent, sendProxy, sendRedirect, sendStream, sendWebResponse, serveStatic, setCookie, setHeader, setHeaders, setResponseHeader, setResponseHeaders, setResponseStatus, splitCookiesString, toEventHandler, toNodeListener, toPlainHandler, toWebHandler, toWebRequest, unsealSession, updateSession, useBase, useSession, writeEarlyHints } from 'h3';
 export { requireAdmin, validateSubdomain } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/user-service/utils/admin';
+export { verifyOnboardingPayment, PaymentError } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/user-service/utils/payments';
 export { readiness } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/user-service/utils/ready';
 export { initUserDb } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/user-service/utils/schema';
-export { PLANS, genSignupCode, upsertTenant, markProvisioned, listTenants, checkSignupCode } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/user-service/utils/tenants';
+export { PLANS, genSignupCode, upsertTenant, markProvisioned, listTenants, upsertProvisioningJob, getProvisioningJob, setTenantClusterInfo, checkSignupCode } from '/Users/kaicikoglu/IdeaProjects/TravelManager/services/user-service/utils/tenants';

@@ -18,7 +18,7 @@
     <table v-else class="admin-table">
       <thead>
         <tr>
-          <th>Subdomain</th>
+          <th>Endpoint</th>
           <th>Name</th>
           <th>Plan</th>
           <th>Status</th>
@@ -31,12 +31,19 @@
         <tr v-for="t in tenants" :key="t.id">
           <td>
             <code v-if="t.subdomain">{{ t.subdomain }}.onecloudaway.de</code>
+            <template v-else-if="t.plan === 'enterprise'">
+              <code v-if="t.custom_domain">{{ t.custom_domain }}</code>
+              <code v-else-if="t.system_hostname">{{ t.system_hostname }}</code>
+              <code v-else-if="t.ingress_ip">{{ t.ingress_ip }}</code>
+              <span v-else class="muted">{{ t.id }} (dedicated cluster)</span>
+            </template>
             <span v-else class="muted">onecloudaway.de (free)</span>
           </td>
           <td>{{ t.name }}</td>
           <td><span class="plan-pill" :class="`plan-${t.plan}`">{{ t.plan }}</span></td>
           <td>
-            <span v-if="t.provisioned_at" class="status-live">● live</span>
+            <span v-if="t.tls_status === 'destroying'" class="status-pending">○ destroying…</span>
+            <span v-else-if="t.provisioned_at" class="status-live">● live</span>
             <span v-else class="status-pending">○ provisioning…</span>
           </td>
           <td>
@@ -92,13 +99,27 @@ async function copy(code) {
 
 const deleting = ref('')
 async function remove(t) {
-  const label = t.subdomain ? `${t.subdomain}.onecloudaway.de` : t.id
-  if (!confirm(`Delete "${label}"? This destroys its database pod and ALL its data, and moves its members back to the free tier. This cannot be undone.`)) return
+  const enterprise = t.plan === 'enterprise'
+  if (enterprise) {
+    // Tearing down a dedicated cluster destroys a GKE cluster + Cloud SQL and is slow
+    // + irreversible — require the operator to type the id to confirm.
+    const typed = prompt(`Tear down enterprise tenant "${t.id}"? This DESTROYS its dedicated GKE cluster and Cloud SQL (all data) and cannot be undone.\n\nType the tenant id to confirm:`)
+    if (typed !== t.id) return
+  } else {
+    const label = t.subdomain ? `${t.subdomain}.onecloudaway.de` : t.id
+    if (!confirm(`Delete "${label}"? This destroys its database pod and ALL its data, and moves its members back to the free tier. This cannot be undone.`)) return
+  }
   deleting.value = t.id
   error.value = ''
   try {
     await apiFetch(`/api/admin/tenants/${t.id}`, { method: 'DELETE' })
-    tenants.value = tenants.value.filter((x) => x.id !== t.id)
+    if (enterprise) {
+      // Async destroy Job — keep the row, mark it destroying (status finalizes the
+      // removal on the next poll/refresh once the cluster is gone).
+      t.tls_status = 'destroying'
+    } else {
+      tenants.value = tenants.value.filter((x) => x.id !== t.id)
+    }
   } catch (e) {
     error.value = e?.data?.statusMessage || e?.message || 'Delete failed'
   } finally {
