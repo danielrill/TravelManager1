@@ -217,6 +217,10 @@ export function dedicatedServices() {
   return APP_SERVICES.filter((s) => set.has(s))
 }
 
+export function dedicatedPodsEnabled() {
+  return process.env.TENANT_DEDICATED_PODS === '1'
+}
+
 // ServiceAccount for a per-tenant app pod. Default: the single shared KSA
 // `travelmanager` (one Workload-Identity binding, current behaviour). With
 // TENANT_PER_SERVICE_SA=1 each service gets its OWN KSA (`<svc minus -service>-sa`,
@@ -384,6 +388,7 @@ function appHpa(id, svc) {
 // Idempotent (409 → success).
 export async function createTenantApps(id) {
   if (!k8sEnabled()) return { skipped: 'k8s disabled' }
+  if (!dedicatedPodsEnabled()) return { skipped: 'dedicated tenant pods disabled' }
   if (!APP_IMAGE_REGISTRY) throw new Error('TENANT_APP_IMAGE_REGISTRY not set')
   const { apps, core, autoscaling } = clients()
   const created = []
@@ -401,6 +406,7 @@ export async function createTenantApps(id) {
 // so the gateway never routes to a tenant pod that isn't serving yet.
 export async function waitForTenantApps(id, { timeoutMs = 180000, intervalMs = 4000 } = {}) {
   if (!k8sEnabled()) return true
+  if (!dedicatedPodsEnabled()) return true
   const { apps } = clients()
   const deadline = Date.now() + timeoutMs
   const pending = new Set(dedicatedServices().map((s) => `${s}-${id}`))
@@ -438,7 +444,7 @@ export async function countServiceNegs() {
 // How many NEG-backed Services a new tenant adds: one per dedicated app service
 // + the (headless) Postgres Service.
 export function tenantNegCount() {
-  return dedicatedServices().length + 1
+  return (dedicatedPodsEnabled() ? dedicatedServices().length : 0) + 1
 }
 
 // Tear down a tenant's app pods (Deployment + Service + HPA per service).
