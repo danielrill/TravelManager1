@@ -83,6 +83,18 @@ export async function initTripDb(db = getDb()) {
       UNIQUE(trip_id, reviewer_id)
     );
 
+    -- Lightweight per-trip activities ("routes": Camp Nou, sightseeing, …).
+    -- Distinct from travel_plans (the single heavyweight wizard plan); many per trip.
+    CREATE TABLE IF NOT EXISTS trip_routes (
+      id          SERIAL      PRIMARY KEY,
+      trip_id     INTEGER     NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+      title       TEXT        NOT NULL,
+      description TEXT        NOT NULL DEFAULT '',
+      created_at  TIMESTAMPTZ DEFAULT NOW()
+    );
+    -- Routes are always fetched per trip, ordered oldest-first.
+    CREATE INDEX IF NOT EXISTS trip_routes_trip_idx ON trip_routes (trip_id, created_at);
+
     CREATE TABLE IF NOT EXISTS travel_plans (
       id                      SERIAL  PRIMARY KEY,
       trip_id                 INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE UNIQUE,

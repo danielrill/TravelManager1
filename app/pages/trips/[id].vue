@@ -25,6 +25,7 @@
       <!-- In-page section nav — jump around a long trip page -->
       <nav class="trip-subnav">
         <button class="trip-subnav-item" @click="scrollToSection('sec-overview')">Overview</button>
+        <button class="trip-subnav-item" @click="scrollToSection('sec-routes')">Routes</button>
         <button v-if="detailMarkers.length" class="trip-subnav-item" @click="scrollToSection('sec-map')">Map</button>
         <button class="trip-subnav-item" @click="scrollToSection('sec-social')">Community</button>
         <button class="trip-subnav-item" @click="scrollToSection('sec-reviews')">Reviews</button>
@@ -60,6 +61,15 @@
           <h3>Details</h3>
           <p>{{ trip.detail_description }}</p>
         </div>
+      </div>
+
+      <!-- ── Routes section ── -->
+      <div id="sec-routes" class="routes-section">
+        <div class="routes-section-header">
+          <h2 class="routes-section-title">Routes</h2>
+          <p class="routes-section-sub">The activities and spots from this trip.</p>
+        </div>
+        <TripRoutes :trip-id="trip.id" :is-owner="isOwner" />
       </div>
 
       <!-- ── Map section ── -->
@@ -592,8 +602,29 @@ function accommodationIcon(t) { return ACCOMMODATION_ICONS[t] ?? '🏠' }
   color: var(--navy);
 }
 /* Sections clear the sticky navbar + subnav when jumped to */
-#sec-overview, #sec-map, #sec-social, #sec-reviews, #sec-plan {
+#sec-overview, #sec-routes, #sec-map, #sec-social, #sec-reviews, #sec-plan {
   scroll-margin-top: 120px;
+}
+
+/* ── Routes section ── */
+.routes-section {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 36px 44px;
+  box-shadow: var(--shadow);
+  margin-top: 24px;
+}
+.routes-section-header { margin-bottom: 24px; }
+.routes-section-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.5rem;
+  color: var(--navy);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.routes-section-sub {
+  color: var(--text-muted);
+  font-size: 0.88rem;
 }
 
 .map-section {

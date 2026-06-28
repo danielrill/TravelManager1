@@ -11,6 +11,7 @@ const ROUTES = [
   { prefix: '/api/users',        service: 'user' },
   { prefix: '/api/tenants',      service: 'user' },
   { prefix: '/api/trips',        service: 'trip' },
+  { prefix: '/api/trip-routes',  service: 'trip' },
   { prefix: '/api/locations',    service: 'trip' },
   { prefix: '/api/reviews',      service: 'trip' },
   { prefix: '/api/likes',        service: 'trip' },
