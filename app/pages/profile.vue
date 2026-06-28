@@ -10,6 +10,11 @@
 
     <div v-if="pending" class="loading">Loading profile…</div>
 
+    <div v-else-if="profileError" class="profile-load-error">
+      <p class="form-error">{{ profileError }}</p>
+      <button class="btn" @click="reloadPage">Retry</button>
+    </div>
+
     <template v-else-if="profile">
       <!-- ── Profile card ── -->
       <div class="profile-card">
@@ -90,6 +95,15 @@
             <span class="stat-value">{{ memberYear }}</span>
             <span class="stat-label">Member Since</span>
           </div>
+        </div>
+
+        <!-- Trips load failed (e.g. tenant pod still warming up → 503). The profile
+             still renders; the stats just fall back to 0 until a successful retry. -->
+        <div v-if="tripsError" class="trips-error">
+          <span class="form-error">{{ tripsError }}</span>
+          <button class="btn btn-retry-trips" :disabled="tripsLoading" @click="loadTrips">
+            {{ tripsLoading ? 'Retrying…' : 'Retry' }}
+          </button>
         </div>
 
         <!-- View mode: bio -->
@@ -287,21 +301,44 @@ const FEATURES = [
 const profile = ref(null)
 const trips   = ref([])
 const pending = ref(true)
+const profileError = ref('')
+const tripsError   = ref('')
+const tripsLoading = ref(false)
+
+// Trips are NON-critical to the profile view (they only feed the stat counts), so
+// load them independently with their own error + retry. A freshly-provisioned
+// standard tenant can briefly 503 /api/trips while its pod warms up; that must not
+// take down the whole profile (a Promise.all would reject and leave profile null →
+// blank page).
+function reloadPage () {
+  if (import.meta.client) window.location.reload()
+}
+
+async function loadTrips () {
+  tripsError.value = ''
+  tripsLoading.value = true
+  try {
+    trips.value = await apiFetch('/api/trips')
+  } catch (err) {
+    trips.value = []
+    tripsError.value = err?.data?.statusMessage || err?.message || 'Could not load your trips'
+  } finally {
+    tripsLoading.value = false
+  }
+}
 
 onMounted(async () => {
   await waitAuthReady()
   if (!user.value) return navigateTo('/register')
   const uid = user.value.firebase_uid
   try {
-    const [p, t] = await Promise.all([
-      apiFetch(`/api/users/${uid}`),
-      apiFetch('/api/trips'),
-    ])
-    profile.value = p
-    trips.value   = t
+    profile.value = await apiFetch(`/api/users/${uid}`)
+  } catch (err) {
+    profileError.value = err?.data?.statusMessage || err?.message || 'Could not load your profile'
   } finally {
     pending.value = false
   }
+  if (profile.value) loadTrips()
 })
 
 const safeTrips = computed(() => trips.value ?? [])
@@ -530,6 +567,28 @@ async function saveProfile() {
 </script>
 
 <style scoped>
+/* ── Load errors ── */
+.profile-load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 40px 20px;
+  text-align: center;
+}
+.trips-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+}
+.btn-retry-trips {
+  padding: 6px 16px;
+  font-size: 0.85rem;
+}
+
 /* ── Setup banner ── */
 .setup-banner {
   background: rgba(201,168,76,0.12);

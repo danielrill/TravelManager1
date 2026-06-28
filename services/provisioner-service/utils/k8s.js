@@ -402,8 +402,31 @@ export async function createTenantApps(id) {
   return { created }
 }
 
-// Poll until every per-tenant app Deployment has ≥1 available replica (or timeout),
-// so the gateway never routes to a tenant pod that isn't serving yet.
+// HTTP readiness gate via the tenant pod's Service name. A Deployment showing
+// availableReplicas>=1 only means the pod passed its readiness probe LOCALLY —
+// the Service endpoint + managed-ASM mesh NEG that the gateway actually routes
+// through propagate a few seconds later. Marking the tenant live on the pod-ready
+// signal alone leaves a window where the gateway gets 0 healthy upstreams and
+// every /api/* 503s on a tenant that already looks provisioned. So after the
+// replica is available we additionally require a 200 from /api/ready THROUGH the
+// Service name — the exact path the gateway takes — before treating the app as
+// serving. Returns true on 200, false otherwise (caller keeps polling).
+async function serviceReady(name) {
+  const ctl = new AbortController()
+  const t = setTimeout(() => ctl.abort(), 3000)
+  try {
+    const res = await fetch(`http://${name}:8080/api/ready`, { signal: ctl.signal })
+    return res.ok
+  } catch {
+    return false // endpoint/mesh not routable yet — keep waiting
+  } finally {
+    clearTimeout(t)
+  }
+}
+
+// Poll until every per-tenant app Deployment has ≥1 available replica AND answers
+// 200 on /api/ready through its Service (endpoints + mesh routable), so the gateway
+// never routes to a tenant pod that isn't serving yet.
 export async function waitForTenantApps(id, { timeoutMs = 180000, intervalMs = 4000 } = {}) {
   if (!k8sEnabled()) return true
   if (!dedicatedPodsEnabled()) return true
@@ -414,7 +437,9 @@ export async function waitForTenantApps(id, { timeoutMs = 180000, intervalMs = 4
     for (const name of [...pending]) {
       try {
         const res = await apps.readNamespacedDeploymentStatus(name, SCHEMA_NS)
-        if ((res?.body?.status?.availableReplicas || 0) >= 1) pending.delete(name)
+        if ((res?.body?.status?.availableReplicas || 0) >= 1 && (await serviceReady(name))) {
+          pending.delete(name)
+        }
       } catch (e) {
         console.error(`[provisioner] waitForApps ${name}:`, e?.message || e)
       }
