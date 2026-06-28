@@ -48,7 +48,7 @@
             <td class="num">{{ fmt(l.used) }}</td>
             <td class="num">{{ fmt(l.included) }}</td>
             <td class="num">{{ fmt(l.overage) }}</td>
-            <td class="num">{{ centsToEur(l.unitRateCents) }}</td>
+            <td class="num">{{ centsToEurRate(l.unitRateCents) }}</td>
             <td class="num">{{ centsToEur(l.costCents) }}</td>
           </tr>
           <tr v-if="!data.lines?.length">
@@ -90,6 +90,15 @@ function label(d) {
 }
 function centsToEur(c) {
   return ((Number(c) || 0) / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
+}
+// Unit rates can be fractional cents (e.g. 0.01¢ = 0,0001 €); show up to 4 decimals so they don't round to 0,00 €.
+function centsToEurRate(c) {
+  return ((Number(c) || 0) / 100).toLocaleString('de-DE', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  })
 }
 function fmt(n) {
   return (Number(n) || 0).toLocaleString('de-DE')
