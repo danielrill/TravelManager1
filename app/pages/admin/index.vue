@@ -112,12 +112,13 @@ async function remove(t) {
   deleting.value = t.id
   error.value = ''
   try {
-    await apiFetch(`/api/admin/tenants/${t.id}`, { method: 'DELETE' })
-    if (enterprise) {
-      // Async destroy Job — keep the row, mark it destroying (status finalizes the
-      // removal on the next poll/refresh once the cluster is gone).
+    const res = await apiFetch(`/api/admin/tenants/${t.id}`, { method: 'DELETE' })
+    if (enterprise && res?.status === 'destroying') {
+      // Live cluster: async destroy Job — keep the row, mark it destroying (status
+      // finalizes the removal on the next poll/refresh once the cluster is gone).
       t.tls_status = 'destroying'
     } else {
+      // Standard, or an enterprise tenant that never built (removed immediately).
       tenants.value = tenants.value.filter((x) => x.id !== t.id)
     }
   } catch (e) {

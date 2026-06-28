@@ -22,12 +22,23 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = getDb()
-  const { rows } = await db.query('SELECT id, plan, subdomain FROM tenants WHERE id = $1', [id])
+  const { rows } = await db.query('SELECT id, plan, subdomain, provisioned_at, cluster_name FROM tenants WHERE id = $1', [id])
   if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Tenant not found' })
-  const { plan, subdomain: sub } = rows[0]
+  const { plan, subdomain: sub, provisioned_at, cluster_name } = rows[0]
 
   const provUrl = process.env.PROVISIONER_SERVICE_URL || 'http://localhost:3006'
   const headers = { ...traceHeaders(event), 'x-internal-token': process.env.PROVISIONER_INTERNAL_TOKEN || '' }
+
+  // ── Enterprise that NEVER built (failed/aborted apply: no cluster) ──
+  // Nothing exists in GCP to tear down, so don't spawn a destroy Job (it would just
+  // sit at "destroying…" and the list never finalizes it). Remove the rows directly.
+  if (plan === 'enterprise' && !provisioned_at && !cluster_name) {
+    await db.query('DELETE FROM provisioning_jobs WHERE tenant_id = $1', [id])
+    await db.query(`UPDATE users SET tenant_id = 'default' WHERE tenant_id = $1`, [id])
+    await db.query('DELETE FROM tenants WHERE id = $1', [id])
+    invalidate(`tenant:${id}`)
+    return { ok: true, deleted: id }
+  }
 
   // ── Enterprise: async destroy of the dedicated cluster ──
   if (plan === 'enterprise') {
