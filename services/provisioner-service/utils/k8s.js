@@ -384,17 +384,69 @@ function appHpa(id, svc) {
   }
 }
 
+function meshHost(id, svc) {
+  return `${svc}-${id}.${SCHEMA_NS}.svc.cluster.local`
+}
+
+function meshServiceEntry(id, svc) {
+  const name = `${svc}-${id}`
+  return {
+    apiVersion: 'networking.istio.io/v1beta1',
+    kind: 'ServiceEntry',
+    metadata: { name, labels: appLabels(id, svc) },
+    spec: {
+      hosts: [meshHost(id, svc), name],
+      location: 'MESH_INTERNAL',
+      ports: [{ number: 8080, name: 'http', protocol: 'HTTP' }],
+      resolution: 'DNS',
+    },
+  }
+}
+
+function meshDestinationRule(id, svc) {
+  const name = `${svc}-${id}`
+  return {
+    apiVersion: 'networking.istio.io/v1beta1',
+    kind: 'DestinationRule',
+    metadata: { name, labels: appLabels(id, svc) },
+    spec: {
+      host: meshHost(id, svc),
+      trafficPolicy: { tls: { mode: 'ISTIO_MUTUAL' } },
+    },
+  }
+}
+
+async function createMeshRoute(custom, id, svc) {
+  await ignoreConflict(custom.createNamespacedCustomObject(
+    'networking.istio.io', 'v1beta1', SCHEMA_NS, 'serviceentries', meshServiceEntry(id, svc)
+  ))
+  await ignoreConflict(custom.createNamespacedCustomObject(
+    'networking.istio.io', 'v1beta1', SCHEMA_NS, 'destinationrules', meshDestinationRule(id, svc)
+  ))
+}
+
+async function deleteMeshRoute(custom, id, svc) {
+  const name = `${svc}-${id}`
+  await ignoreMissing(custom.deleteNamespacedCustomObject(
+    'networking.istio.io', 'v1beta1', SCHEMA_NS, 'destinationrules', name
+  ))
+  await ignoreMissing(custom.deleteNamespacedCustomObject(
+    'networking.istio.io', 'v1beta1', SCHEMA_NS, 'serviceentries', name
+  ))
+}
+
 // Create the per-tenant Deployment + Service + HPA for every backend service.
 // Idempotent (409 → success).
 export async function createTenantApps(id) {
   if (!k8sEnabled()) return { skipped: 'k8s disabled' }
   if (!dedicatedPodsEnabled()) return { skipped: 'dedicated tenant pods disabled' }
   if (!APP_IMAGE_REGISTRY) throw new Error('TENANT_APP_IMAGE_REGISTRY not set')
-  const { apps, core, autoscaling } = clients()
+  const { apps, core, autoscaling, custom } = clients()
   const created = []
   // Only the DEDICATED services get a per-tenant pod; the rest run on shared pods.
   for (const svc of dedicatedServices()) {
     await ignoreConflict(core.createNamespacedService(SCHEMA_NS, appService(id, svc)))
+    await createMeshRoute(custom, id, svc)
     await ignoreConflict(apps.createNamespacedDeployment(SCHEMA_NS, appDeployment(id, svc)))
     await ignoreConflict(autoscaling.createNamespacedHorizontalPodAutoscaler(SCHEMA_NS, appHpa(id, svc)))
     created.push(`${svc}-${id}`)
@@ -476,13 +528,14 @@ export function tenantNegCount() {
 // Best-effort; ignores 404 so it's safe to re-run.
 export async function deleteTenantApps(id) {
   if (!k8sEnabled()) return { skipped: 'k8s disabled' }
-  const { apps, core, autoscaling } = clients()
+  const { apps, core, autoscaling, custom } = clients()
   const deleted = []
   for (const svc of APP_SERVICES) {
     const name = `${svc}-${id}`
     await ignoreMissing(autoscaling.deleteNamespacedHorizontalPodAutoscaler(name, SCHEMA_NS))
     await ignoreMissing(apps.deleteNamespacedDeployment(name, SCHEMA_NS))
     await ignoreMissing(core.deleteNamespacedService(name, SCHEMA_NS))
+    await deleteMeshRoute(custom, id, svc)
     deleted.push(name)
   }
   return { deleted }
