@@ -110,9 +110,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 // Poll the (uncached) admin status route until the tenant flips live (or fails), or
 // give up after the cap. Must be /api/admin/* — the gateway 404s every non-/api/admin
 // path on the admin host. Enterprise cluster creation takes far longer than a pod, so
-// it gets a 20-minute cap vs 8 for standard.
+// it gets a 90-minute cap vs 8 for standard. The cap MUST be >= the provisioner Job's
+// deadline (ENTERPRISE_TF_DEADLINE_SECONDS, default 5400s) — a shorter cap makes the SPA
+// give up ("slow") while the create is still legitimately running.
 async function pollUntilLive(id, enterprise) {
-  const cap = (enterprise ? 20 : 8) * 60 * 1000
+  const cap = (enterprise ? 90 : 8) * 60 * 1000
   const deadline = Date.now() + cap
   while (Date.now() < deadline) {
     await sleep(POLL_MS)

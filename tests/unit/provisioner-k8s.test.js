@@ -1,5 +1,13 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { dedicatedServices, appEnv, serviceAccountFor } from '../../services/provisioner-service/utils/k8s.js'
+import {
+  dedicatedPodsEnabled,
+  dedicatedServices,
+  createTenantApps,
+  appEnv,
+  serviceAccountFor,
+  tenantNegCount,
+  waitForTenantApps,
+} from '../../services/provisioner-service/utils/k8s.js'
 
 const saved = { ...process.env }
 afterEach(() => { process.env = { ...saved } })
@@ -20,6 +28,42 @@ describe('provisioner.dedicatedServices', () => {
   it('drops unknown services not in APP_SERVICES', () => {
     process.env.TENANT_DEDICATED_SERVICES = 'trip-service,bogus-service'
     expect(dedicatedServices()).toEqual(['trip-service'])
+  })
+})
+
+describe('provisioner.dedicatedPodsEnabled', () => {
+  it('requires TENANT_DEDICATED_PODS=1', () => {
+    delete process.env.TENANT_DEDICATED_PODS
+    expect(dedicatedPodsEnabled()).toBe(false)
+    process.env.TENANT_DEDICATED_PODS = '0'
+    expect(dedicatedPodsEnabled()).toBe(false)
+    process.env.TENANT_DEDICATED_PODS = '1'
+    expect(dedicatedPodsEnabled()).toBe(true)
+  })
+})
+
+describe('provisioner.tenantNegCount', () => {
+  it('counts only the Postgres Service when dedicated tenant pods are disabled', () => {
+    delete process.env.TENANT_DEDICATED_PODS
+    delete process.env.TENANT_DEDICATED_SERVICES
+    expect(tenantNegCount()).toBe(1)
+  })
+
+  it('adds one Service per dedicated app when tenant pods are enabled', () => {
+    process.env.TENANT_DEDICATED_PODS = '1'
+    process.env.TENANT_DEDICATED_SERVICES = 'trip-service,social-service'
+    expect(tenantNegCount()).toBe(3)
+  })
+})
+
+describe('provisioner tenant app pods flag', () => {
+  it('skips app pod creation and waiting when dedicated pods are disabled', async () => {
+    process.env.PROVISIONER_K8S_ENABLED = '1'
+    delete process.env.TENANT_DEDICATED_PODS
+    delete process.env.TENANT_APP_IMAGE_REGISTRY
+
+    await expect(createTenantApps('acme')).resolves.toEqual({ skipped: 'dedicated tenant pods disabled' })
+    await expect(waitForTenantApps('acme')).resolves.toBe(true)
   })
 })
 

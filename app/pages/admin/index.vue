@@ -43,6 +43,7 @@
           <td><span class="plan-pill" :class="`plan-${t.plan}`">{{ t.plan }}</span></td>
           <td>
             <span v-if="t.tls_status === 'destroying'" class="status-pending">○ destroying…</span>
+            <span v-else-if="t.tls_status === 'failed'" class="status-failed">✗ failed</span>
             <span v-else-if="t.provisioned_at" class="status-live">● live</span>
             <span v-else class="status-pending">○ provisioning…</span>
           </td>
@@ -80,6 +81,7 @@ async function load() {
   error.value = ''
   try {
     tenants.value = await apiFetch('/api/admin/tenants')
+    startPolling()
   } catch (e) {
     const code = e?.statusCode || e?.response?.status
     error.value = code === 403
@@ -91,6 +93,43 @@ async function load() {
     loading.value = false
   }
 }
+
+// An enterprise tenant mid-lifecycle (apply running, or a destroy in flight) only
+// settles when its per-tenant status endpoint is hit — the list endpoint doesn't
+// reconcile. Poll those rows here so they flip to live (with the ingress IP) or
+// vanish once destroyed, without leaving the page.
+let pollTimer = null
+function inFlight(t) {
+  // Enterprise: poll while an apply is running (no provisioned_at yet) or a destroy is
+  // in flight. Standard: poll while it's still provisioning (no provisioned_at) so the
+  // row flips to live on its own once the provisioner marks it ready — without a manual
+  // reload. The free 'default' tenant is already provisioned, so it never polls.
+  if (t.plan === 'enterprise') return t.tls_status === 'destroying' || !t.provisioned_at
+  return !t.provisioned_at
+}
+async function reconcile() {
+  for (const t of tenants.value.filter(inFlight)) {
+    try {
+      const res = await apiFetch(`/api/admin/tenants/${t.id}`)
+      if (res?.status === 'deleted') { tenants.value = tenants.value.filter((x) => x.id !== t.id); continue }
+      if (res?.ingress_ip) t.ingress_ip = res.ingress_ip
+      if (res?.system_hostname) t.system_hostname = res.system_hostname
+      if (res?.status === 'live') { t.provisioned_at = t.provisioned_at || new Date().toISOString(); t.tls_status = null }
+      else if (res?.status === 'failed') t.tls_status = 'failed'
+    } catch (e) {
+      if ((e?.statusCode || e?.response?.status) === 404) tenants.value = tenants.value.filter((x) => x.id !== t.id)
+    }
+  }
+}
+function startPolling() {
+  stopPolling()
+  pollTimer = setInterval(() => {
+    if (!tenants.value.some(inFlight)) { stopPolling(); return }
+    reconcile()
+  }, 5000)
+}
+function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null } }
+onUnmounted(stopPolling)
 
 const copiedCode = ref('')
 async function copy(code) {
@@ -112,12 +151,14 @@ async function remove(t) {
   deleting.value = t.id
   error.value = ''
   try {
-    await apiFetch(`/api/admin/tenants/${t.id}`, { method: 'DELETE' })
-    if (enterprise) {
-      // Async destroy Job — keep the row, mark it destroying (status finalizes the
-      // removal on the next poll/refresh once the cluster is gone).
+    const res = await apiFetch(`/api/admin/tenants/${t.id}`, { method: 'DELETE' })
+    if (enterprise && res?.status === 'destroying') {
+      // Live cluster: async destroy Job — keep the row, mark it destroying; the poller
+      // finalizes the removal once the destroy Job completes.
       t.tls_status = 'destroying'
+      startPolling()
     } else {
+      // Standard, or an enterprise tenant that never built (removed immediately).
       tenants.value = tenants.value.filter((x) => x.id !== t.id)
     }
   } catch (e) {
@@ -144,6 +185,7 @@ watch([authReady, user], ([ready, u]) => { if (ready && u) load() }, { immediate
 .plan-enterprise { background: #ede9fe; color: #5b21b6; }
 .status-live { color: #16a34a; }
 .status-pending { color: #d97706; }
+.status-failed { color: #dc2626; }
 .muted { color: var(--muted, #6b7280); }
 code { font-size: 0.85rem; }
 .code-btn { font-family: monospace; letter-spacing: 0.1em; padding: 0.2rem 0.5rem; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; background: #f9fafb; cursor: pointer; }

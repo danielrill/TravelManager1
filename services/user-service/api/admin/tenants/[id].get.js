@@ -11,7 +11,7 @@
 import { getDb } from '@travelmanager/shared/db'
 import { invalidate } from '@travelmanager/shared/cache'
 import { requireAdmin } from '../../../utils/admin.js'
-import { markProvisioned, setTenantClusterInfo, upsertProvisioningJob } from '../../../utils/tenants.js'
+import { markProvisioned, setTenantClusterInfo, upsertProvisioningJob, getProvisioningJob } from '../../../utils/tenants.js'
 import { traceHeaders } from '@travelmanager/shared/trace'
 
 function provHeaders(event) {
@@ -67,6 +67,15 @@ export default defineEventHandler(async (event) => {
       id, plan: 'enterprise', status: 'live',
       ingress_ip: t.ingress_ip, system_hostname: t.system_hostname, cluster_name: t.cluster_name,
     }
+  }
+
+  // If the apply Job never even started (e.g. provisioner threw before creating it —
+  // enterprise not enabled, image missing), the create flow persisted a 'failed' job
+  // row. Surface that instead of polling the live Job (which would report 'unknown' →
+  // a perpetual, misleading 'provisioning').
+  const persisted = await getProvisioningJob(id, 'create')
+  if (persisted?.status === 'failed') {
+    return { id, plan: 'enterprise', status: 'failed', phase: 'failed', error: persisted.error || 'provisioning failed to start' }
   }
 
   // Reconcile from the provisioner's live view of the Terraform apply Job.

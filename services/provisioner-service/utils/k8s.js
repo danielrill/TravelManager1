@@ -217,6 +217,10 @@ export function dedicatedServices() {
   return APP_SERVICES.filter((s) => set.has(s))
 }
 
+export function dedicatedPodsEnabled() {
+  return process.env.TENANT_DEDICATED_PODS === '1'
+}
+
 // ServiceAccount for a per-tenant app pod. Default: the single shared KSA
 // `travelmanager` (one Workload-Identity binding, current behaviour). With
 // TENANT_PER_SERVICE_SA=1 each service gets its OWN KSA (`<svc minus -service>-sa`,
@@ -380,16 +384,69 @@ function appHpa(id, svc) {
   }
 }
 
+function meshHost(id, svc) {
+  return `${svc}-${id}.${SCHEMA_NS}.svc.cluster.local`
+}
+
+function meshServiceEntry(id, svc) {
+  const name = `${svc}-${id}`
+  return {
+    apiVersion: 'networking.istio.io/v1beta1',
+    kind: 'ServiceEntry',
+    metadata: { name, labels: appLabels(id, svc) },
+    spec: {
+      hosts: [meshHost(id, svc), name],
+      location: 'MESH_INTERNAL',
+      ports: [{ number: 8080, name: 'http', protocol: 'HTTP' }],
+      resolution: 'DNS',
+    },
+  }
+}
+
+function meshDestinationRule(id, svc) {
+  const name = `${svc}-${id}`
+  return {
+    apiVersion: 'networking.istio.io/v1beta1',
+    kind: 'DestinationRule',
+    metadata: { name, labels: appLabels(id, svc) },
+    spec: {
+      host: meshHost(id, svc),
+      trafficPolicy: { tls: { mode: 'ISTIO_MUTUAL' } },
+    },
+  }
+}
+
+async function createMeshRoute(custom, id, svc) {
+  await ignoreConflict(custom.createNamespacedCustomObject(
+    'networking.istio.io', 'v1beta1', SCHEMA_NS, 'serviceentries', meshServiceEntry(id, svc)
+  ))
+  await ignoreConflict(custom.createNamespacedCustomObject(
+    'networking.istio.io', 'v1beta1', SCHEMA_NS, 'destinationrules', meshDestinationRule(id, svc)
+  ))
+}
+
+async function deleteMeshRoute(custom, id, svc) {
+  const name = `${svc}-${id}`
+  await ignoreMissing(custom.deleteNamespacedCustomObject(
+    'networking.istio.io', 'v1beta1', SCHEMA_NS, 'destinationrules', name
+  ))
+  await ignoreMissing(custom.deleteNamespacedCustomObject(
+    'networking.istio.io', 'v1beta1', SCHEMA_NS, 'serviceentries', name
+  ))
+}
+
 // Create the per-tenant Deployment + Service + HPA for every backend service.
 // Idempotent (409 → success).
 export async function createTenantApps(id) {
   if (!k8sEnabled()) return { skipped: 'k8s disabled' }
+  if (!dedicatedPodsEnabled()) return { skipped: 'dedicated tenant pods disabled' }
   if (!APP_IMAGE_REGISTRY) throw new Error('TENANT_APP_IMAGE_REGISTRY not set')
-  const { apps, core, autoscaling } = clients()
+  const { apps, core, autoscaling, custom } = clients()
   const created = []
   // Only the DEDICATED services get a per-tenant pod; the rest run on shared pods.
   for (const svc of dedicatedServices()) {
     await ignoreConflict(core.createNamespacedService(SCHEMA_NS, appService(id, svc)))
+    await createMeshRoute(custom, id, svc)
     await ignoreConflict(apps.createNamespacedDeployment(SCHEMA_NS, appDeployment(id, svc)))
     await ignoreConflict(autoscaling.createNamespacedHorizontalPodAutoscaler(SCHEMA_NS, appHpa(id, svc)))
     created.push(`${svc}-${id}`)
@@ -397,10 +454,34 @@ export async function createTenantApps(id) {
   return { created }
 }
 
-// Poll until every per-tenant app Deployment has ≥1 available replica (or timeout),
-// so the gateway never routes to a tenant pod that isn't serving yet.
-export async function waitForTenantApps(id, { timeoutMs = 180000, intervalMs = 4000 } = {}) {
+// HTTP readiness gate via the tenant pod's Service name. A Deployment showing
+// availableReplicas>=1 only means the pod passed its readiness probe LOCALLY —
+// the Service endpoint + managed-ASM mesh NEG that the gateway actually routes
+// through propagate a few seconds later. Marking the tenant live on the pod-ready
+// signal alone leaves a window where the gateway gets 0 healthy upstreams and
+// every /api/* 503s on a tenant that already looks provisioned. So after the
+// replica is available we additionally require a 200 from /api/ready THROUGH the
+// Service name — the exact path the gateway takes — before treating the app as
+// serving. Returns true on 200, false otherwise (caller keeps polling).
+async function serviceReady(name) {
+  const ctl = new AbortController()
+  const t = setTimeout(() => ctl.abort(), 3000)
+  try {
+    const res = await fetch(`http://${name}:8080/api/ready`, { signal: ctl.signal })
+    return res.ok
+  } catch {
+    return false // endpoint/mesh not routable yet — keep waiting
+  } finally {
+    clearTimeout(t)
+  }
+}
+
+// Poll until every per-tenant app Deployment has ≥1 available replica AND answers
+// 200 on /api/ready through its Service (endpoints + mesh routable), so the gateway
+// never routes to a tenant pod that isn't serving yet.
+export async function waitForTenantApps(id, { timeoutMs = Number(process.env.TENANT_APP_READY_TIMEOUT_MS || 600000), intervalMs = 4000 } = {}) {
   if (!k8sEnabled()) return true
+  if (!dedicatedPodsEnabled()) return true
   const { apps } = clients()
   const deadline = Date.now() + timeoutMs
   const pending = new Set(dedicatedServices().map((s) => `${s}-${id}`))
@@ -408,7 +489,9 @@ export async function waitForTenantApps(id, { timeoutMs = 180000, intervalMs = 4
     for (const name of [...pending]) {
       try {
         const res = await apps.readNamespacedDeploymentStatus(name, SCHEMA_NS)
-        if ((res?.body?.status?.availableReplicas || 0) >= 1) pending.delete(name)
+        if ((res?.body?.status?.availableReplicas || 0) >= 1 && (await serviceReady(name))) {
+          pending.delete(name)
+        }
       } catch (e) {
         console.error(`[provisioner] waitForApps ${name}:`, e?.message || e)
       }
@@ -438,20 +521,21 @@ export async function countServiceNegs() {
 // How many NEG-backed Services a new tenant adds: one per dedicated app service
 // + the (headless) Postgres Service.
 export function tenantNegCount() {
-  return dedicatedServices().length + 1
+  return (dedicatedPodsEnabled() ? dedicatedServices().length : 0) + 1
 }
 
 // Tear down a tenant's app pods (Deployment + Service + HPA per service).
 // Best-effort; ignores 404 so it's safe to re-run.
 export async function deleteTenantApps(id) {
   if (!k8sEnabled()) return { skipped: 'k8s disabled' }
-  const { apps, core, autoscaling } = clients()
+  const { apps, core, autoscaling, custom } = clients()
   const deleted = []
   for (const svc of APP_SERVICES) {
     const name = `${svc}-${id}`
     await ignoreMissing(autoscaling.deleteNamespacedHorizontalPodAutoscaler(name, SCHEMA_NS))
     await ignoreMissing(apps.deleteNamespacedDeployment(name, SCHEMA_NS))
     await ignoreMissing(core.deleteNamespacedService(name, SCHEMA_NS))
+    await deleteMeshRoute(custom, id, svc)
     deleted.push(name)
   }
   return { deleted }
