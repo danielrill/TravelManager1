@@ -427,7 +427,7 @@ async function serviceReady(name) {
 // Poll until every per-tenant app Deployment has ≥1 available replica AND answers
 // 200 on /api/ready through its Service (endpoints + mesh routable), so the gateway
 // never routes to a tenant pod that isn't serving yet.
-export async function waitForTenantApps(id, { timeoutMs = 180000, intervalMs = 4000 } = {}) {
+export async function waitForTenantApps(id, { timeoutMs = Number(process.env.TENANT_APP_READY_TIMEOUT_MS || 600000), intervalMs = 4000 } = {}) {
   if (!k8sEnabled()) return true
   if (!dedicatedPodsEnabled()) return true
   const { apps } = clients()
