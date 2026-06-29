@@ -207,10 +207,6 @@
           </div>
         </div>
 
-        <div class="plans-footer">
-          <span class="plans-footer-text">Need more? Standard unlocks the personal feed, newsletter and white-label branding; Enterprise adds B2B partner insights and higher rate limits.</span>
-          <a class="btn btn-gold" href="mailto:sales@onecloudaway.example?subject=Plan%20upgrade">Contact us to upgrade →</a>
-        </div>
       </div>
 
       <!-- ── Create your own workspace (self-serve, free users only) ── -->
