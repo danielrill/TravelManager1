@@ -14,10 +14,21 @@ const TF_IMAGE = process.env.ENTERPRISE_TF_IMAGE || ''
 const TF_SA = process.env.ENTERPRISE_TF_SA || 'enterprise-provisioner'
 // Secret carrying TF_VAR_* (db_password, API keys) — env, never command-line args.
 const TF_SECRET = process.env.ENTERPRISE_TF_SECRET || 'enterprise-tf-secrets'
-// Cluster create can run 10-15 min; give generous head-room before the Job is killed.
-const DEADLINE = Number(process.env.ENTERPRISE_TF_DEADLINE_SECONDS || 2400)
+// A cold create stacks GKE Autopilot (create timeout 40m) + Cloud SQL (~15m) + Redis +
+// ESO helm (15m) + 180s webhook wait + app helm wait (20m); even a fully healthy run is
+// ~40-50 min, and the entrypoint may re-apply once on the cold-cluster ESO webhook race.
+// 2400s (40m) was smaller than the healthy path, so the Job killed itself before helm
+// finished. 90 min covers the healthy path plus one retry.
+const DEADLINE = Number(process.env.ENTERPRISE_TF_DEADLINE_SECONDS || 5400)
 // Keep finished Jobs around long enough for the admin console to read final status.
 const TTL = Number(process.env.ENTERPRISE_TF_TTL_SECONDS || 3600)
+// Short -lock-timeout: only ONE Job ever runs per tenant (deterministic name +
+// backoffLimit 0 + the provisioner no-ops on an active Job), so any lock we hit is a
+// stale leftover from a SIGKILLed run, not live contention. The entrypoint force-unlocks
+// it, so a long wait would only delay that self-heal. 2m absorbs GCS eventual consistency.
+const TF_LOCK_TIMEOUT = process.env.ENTERPRISE_TF_LOCK_TIMEOUT || '2m'
+// Max time to wait for Kubernetes to remove an older lifecycle Job before retrying.
+const JOB_DELETE_TIMEOUT_MS = Number(process.env.ENTERPRISE_JOB_DELETE_TIMEOUT_MS || 120000)
 // GCS bucket holding terraform state (per-tenant prefix enterprise/<id>).
 const TF_STATE_BUCKET = process.env.ENTERPRISE_TF_STATE_BUCKET || 'travelmanager-tfstate'
 // App image tag the enterprise cluster should deploy (match the platform version).
@@ -60,6 +71,10 @@ function assertId(id) {
   }
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function jobManifest(id, action) {
   const name = jobName(id, action)
   const l = {
@@ -98,6 +113,8 @@ function jobManifest(id, action) {
                 { name: 'RESULT_CONFIGMAP', value: resultCmName(id) },
                 { name: 'RESULT_NAMESPACE', value: NS },
                 { name: 'TF_STATE_BUCKET', value: TF_STATE_BUCKET },
+                { name: 'TF_CLI_ARGS_apply', value: `-lock-timeout=${TF_LOCK_TIMEOUT}` },
+                { name: 'TF_CLI_ARGS_destroy', value: `-lock-timeout=${TF_LOCK_TIMEOUT}` },
                 { name: 'APP_IMAGE_TAG', value: APP_IMAGE_TAG },
                 ...(DNS_ZONE ? [{ name: 'TF_VAR_dns_managed_zone', value: DNS_ZONE }] : []),
                 ...(FIREBASE_PROJECT ? [{ name: 'FIREBASE_PROJECT_ID', value: FIREBASE_PROJECT }] : []),
@@ -113,11 +130,68 @@ function jobManifest(id, action) {
   }
 }
 
-// Delete a Job (and its pods) if present so the deterministic name is free to
-// re-create. Background propagation reaps the pods too. Idempotent (ignores 404).
-async function deleteJobIfExists(batch, name) {
+async function waitForJobDeleted(batch, name) {
+  const started = Date.now()
+  while (Date.now() - started < JOB_DELETE_TIMEOUT_MS) {
+    try {
+      await batch.readNamespacedJob(name, NS)
+    } catch (e) {
+      const code = e?.statusCode || e?.response?.statusCode || e?.body?.code
+      if (code === 404) return
+      throw e
+    }
+    await sleep(1000)
+  }
+  throw new Error(`Timed out waiting for Kubernetes Job ${name} to be deleted`)
+}
+
+// 'active'   — a Terraform process is mid apply/destroy (holds the GCS state lock)
+// 'finished' — pod has exited (succeeded or failed); no lock held
+// 'absent'   — no such Job
+async function jobState(batch, name) {
+  try {
+    const s = (await batch.readNamespacedJob(name, NS))?.body?.status || {}
+    return s.succeeded || s.failed ? 'finished' : 'active'
+  } catch (e) {
+    const code = e?.statusCode || e?.response?.statusCode || e?.body?.code
+    if (code === 404) return 'absent'
+    throw e
+  }
+}
+
+// Reap a FINISHED Job so its deterministic name is free to recreate. Its pod has already
+// exited, so there is no Terraform process to kill and no state lock to orphan —
+// Background propagation is safe and returns fast (no waiting on a live pod to drain).
+async function reapFinishedJob(batch, name) {
   try {
     await batch.deleteNamespacedJob(name, NS, undefined, undefined, undefined, undefined, 'Background')
+  } catch (e) {
+    const code = e?.statusCode || e?.response?.statusCode || e?.body?.code
+    if (code === 404) return
+    throw e
+  }
+  await waitForJobDeleted(batch, name) // name must be gone before recreating
+}
+
+// Make the deterministic apply/destroy Job names free for a fresh run WITHOUT ever
+// killing a running Terraform pod. A FINISHED prior Job is reaped; an ACTIVE one is left
+// alone and reported via `busy` — SIGKILLing a mid-apply pod orphans the GCS state lock
+// (no TTL), and the next run then blocks the full -lock-timeout (20m) before failing. The
+// in-flight run is idempotent and the SPA keeps polling it, so a no-op is the safe answer.
+async function prepareLifecycle(batch, core, id) {
+  for (const action of ['apply', 'destroy']) {
+    const name = jobName(id, action)
+    const state = await jobState(batch, name)
+    if (state === 'active') return { busy: action }
+    if (state === 'finished') await reapFinishedJob(batch, name)
+  }
+  await deleteResultIfExists(core, id)
+  return { busy: null }
+}
+
+async function deleteResultIfExists(core, id) {
+  try {
+    await core.deleteNamespacedConfigMap(resultCmName(id), NS)
   } catch (e) {
     const code = e?.statusCode || e?.response?.statusCode || e?.body?.code
     if (code !== 404) throw e
@@ -144,22 +218,19 @@ async function readResult(core, id) {
 }
 
 // Spawn the enterprise apply Job (create/converge the dedicated cluster). Returns
-// fast — the caller polls enterpriseStatus(). Re-running is safe: a prior finished
-// apply Job is deleted first, and `terraform apply` itself is idempotent (resume =
-// re-run). A stale result ConfigMap is cleared so status reflects this run.
+// fast — the caller polls enterpriseStatus(). Re-running is safe: a prior FINISHED
+// lifecycle Job is reaped first and `terraform apply` itself is idempotent (resume =
+// re-run). If a lifecycle Job is still ACTIVE we leave it running and no-op (returning
+// alreadyRunning) rather than kill it — see prepareLifecycle. A stale result ConfigMap
+// is cleared so status reflects this run.
 export async function applyEnterprise(id) {
   assertId(id)
   if (!enterpriseEnabled()) return { skipped: 'k8s disabled', job: jobName(id, 'apply') }
   if (!TF_IMAGE) throw new Error('ENTERPRISE_TF_IMAGE not set')
   const { batch, core } = clients()
   const name = jobName(id, 'apply')
-  await deleteJobIfExists(batch, name)
-  try {
-    await core.deleteNamespacedConfigMap(resultCmName(id), NS)
-  } catch (e) {
-    const code = e?.statusCode || e?.response?.statusCode || e?.body?.code
-    if (code !== 404) throw e
-  }
+  const { busy } = await prepareLifecycle(batch, core, id)
+  if (busy) return { job: jobName(id, busy), alreadyRunning: busy }
   await batch.createNamespacedJob(NS, jobManifest(id, 'apply'))
   return { job: name }
 }
@@ -170,9 +241,12 @@ export async function destroyEnterprise(id) {
   assertId(id)
   if (!enterpriseEnabled()) return { skipped: 'k8s disabled', job: jobName(id, 'destroy') }
   if (!TF_IMAGE) throw new Error('ENTERPRISE_TF_IMAGE not set')
-  const { batch } = clients()
+  const { batch, core } = clients()
   const name = jobName(id, 'destroy')
-  await deleteJobIfExists(batch, name)
+  const { busy } = await prepareLifecycle(batch, core, id)
+  // A destroy already running → no-op. An apply still running → leave it (killing it
+  // orphans the lock); the operator can retry the teardown once the apply settles.
+  if (busy) return { job: jobName(id, busy), alreadyRunning: busy }
   await batch.createNamespacedJob(NS, jobManifest(id, 'destroy'))
   return { job: name }
 }
