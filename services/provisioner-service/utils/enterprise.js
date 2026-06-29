@@ -206,6 +206,12 @@ export async function enterpriseStatus(id, action = 'apply') {
   if (!job) {
     if (result?.status === 'ok') return { phase: 'live', ...outputs, error: null }
     if (result?.status === 'error') return { phase: 'failed', ...outputs, error: result.error || 'terraform failed' }
+    // A teardown writes no success ConfigMap (it has no outputs to persist) and its
+    // Job is GC'd after ttlSecondsAfterFinished. For a destroy, an absent Job with no
+    // recorded error means the resources are gone — report it complete so the tenant
+    // row can be finalized instead of stranding on 'unknown' forever. (apply must stay
+    // 'unknown' here: a create is never marked live without an explicit success signal.)
+    if (action === 'destroy') return { phase: 'live', ...outputs, error: null }
     return { phase: 'unknown', ...outputs, error: null }
   }
 

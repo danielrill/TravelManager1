@@ -22,9 +22,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = getDb()
-  const { rows } = await db.query('SELECT id, plan, subdomain, provisioned_at, cluster_name FROM tenants WHERE id = $1', [id])
+  const { rows } = await db.query('SELECT id, plan, subdomain, provisioned_at, cluster_name, tls_status FROM tenants WHERE id = $1', [id])
   if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Tenant not found' })
-  const { plan, subdomain: sub, provisioned_at, cluster_name } = rows[0]
+  const { plan, subdomain: sub, provisioned_at, cluster_name, tls_status } = rows[0]
 
   const provUrl = process.env.PROVISIONER_SERVICE_URL || 'http://localhost:3006'
   const headers = { ...traceHeaders(event), 'x-internal-token': process.env.PROVISIONER_INTERNAL_TOKEN || '' }
@@ -45,6 +45,34 @@ export default defineEventHandler(async (event) => {
       return { ok: true, deleted: id }
     }
     // else fall through → destroy Job (terraform destroy cleans the partial infra).
+  }
+
+  // ── Enterprise re-delete: operator forcing a stuck teardown out of the list ──
+  // The first delete set tls_status='destroying' and fired the destroy Job; the status
+  // poll (GET :id) normally finalizes removal once that Job reports done. If the operator
+  // clicks delete AGAIN, the row is stuck — the provisioner is unreachable, or the Job
+  // was GC'd before any poll caught its success. Re-check the destroy status; if it's
+  // done (or the provisioner can't be reached) hard-remove the rows. Terraform state
+  // lives in GCS per-tenant, so dropping the DB handle never interrupts an in-flight
+  // destroy — it only clears the UI. A teardown still reporting 'failed' is left in place
+  // so real, half-torn-down infra can't silently orphan with no handle to retry.
+  if (plan === 'enterprise' && tls_status === 'destroying') {
+    let phase = null
+    try {
+      const s = await $fetch('/api/internal/enterprise-status', {
+        baseURL: provUrl, params: { tenantId: id, action: 'destroy' }, headers,
+      })
+      phase = s?.phase || null
+    } catch {
+      phase = null // provisioner unreachable → operator override proceeds anyway
+    }
+    if (phase === 'failed') {
+      throw createError({ statusCode: 409, statusMessage: 'Teardown failed — retry the destroy before removing (cluster/SQL may still exist)' })
+    }
+    await db.query('DELETE FROM provisioning_jobs WHERE tenant_id = $1', [id])
+    await db.query('DELETE FROM tenants WHERE id = $1', [id])
+    invalidate(`tenant:${id}`)
+    return { ok: true, deleted: id }
   }
 
   // ── Enterprise: async destroy of the dedicated cluster ──
