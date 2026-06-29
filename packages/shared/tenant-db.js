@@ -63,7 +63,15 @@ export function tenantConn(tid) {
 // Return the pg.Pool for a tenant id. 'default' (free tier) → shared pool.
 export function poolForTenant(tid) {
   if (!tid || tid === 'default') return getDb()
+  // Validate before any host/connstring use so a forged tenant id can never inject,
+  // regardless of routing mode below.
   if (!ID_RE.test(tid)) throw new Error(`bad tenant id: ${tid}`)
+  // No per-tenant Postgres pods on this cluster: free tier shares the DB, and an
+  // enterprise fixed-tenant cluster runs on its own dedicated Cloud SQL reached via
+  // the service's DATABASE_URL. Either way there is no `postgres-<id>` pod to route
+  // to, so every tenant uses the shared getDb() pool. Mirrors the gateway's gate in
+  // api-gateway/utils/routing.js (TENANT_DEDICATED_PODS !== '1' → shared).
+  if (process.env.TENANT_DEDICATED_PODS !== '1') return getDb()
   let pool = pools.get(tid)
   if (!pool) {
     pool = new Pool(tenantConn(tid))
