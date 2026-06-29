@@ -100,7 +100,12 @@ async function load() {
 // vanish once destroyed, without leaving the page.
 let pollTimer = null
 function inFlight(t) {
-  return t.plan === 'enterprise' && (t.tls_status === 'destroying' || !t.provisioned_at)
+  // Enterprise: poll while an apply is running (no provisioned_at yet) or a destroy is
+  // in flight. Standard: poll while it's still provisioning (no provisioned_at) so the
+  // row flips to live on its own once the provisioner marks it ready — without a manual
+  // reload. The free 'default' tenant is already provisioned, so it never polls.
+  if (t.plan === 'enterprise') return t.tls_status === 'destroying' || !t.provisioned_at
+  return !t.provisioned_at
 }
 async function reconcile() {
   for (const t of tenants.value.filter(inFlight)) {
